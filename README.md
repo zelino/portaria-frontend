@@ -1,36 +1,159 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema de Portaria Web
 
-## Getting Started
+Sistema web para controle de fluxo de pessoas e veículos em portaria industrial/empresarial.
 
-First, run the development server:
+## Tecnologias
+
+- **Next.js 16** (App Router)
+- **React 19**
+- **TypeScript**
+- **Tailwind CSS**
+- **shadcn/ui**
+- **React Query** (@tanstack/react-query)
+- **React Hook Form** + **Zod**
+- **Axios**
+- **date-fns**
+- **react-webcam**
+
+## Configuração
+
+### 1. Instalar dependências
+
+```bash
+npm install
+```
+
+### 2. Configurar variáveis de ambiente
+
+Crie um arquivo `.env.local` na raiz do projeto (já está criado):
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000
+```
+
+**Importante:** O backend deve estar rodando na porta 3000.
+
+### 3. Executar o projeto
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+O sistema estará disponível em `http://localhost:3001`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Nota:** O backend deve estar rodando em `http://localhost:3000`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Docker
 
-## Learn More
+O projeto está configurado para ser executado em containers Docker usando multi-stage build para otimização.
 
-To learn more about Next.js, take a look at the following resources:
+### Construir a imagem
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker build -t portaria-playduo .
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Executar o container
 
-## Deploy on Vercel
+```bash
+docker run -p 3001:3001 -e NEXT_PUBLIC_API_URL=http://host.docker.internal:3000 portaria-playduo
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Notas importantes:**
+- A porta 3001 é exposta pelo container e mapeada para a mesma porta no host
+- `NEXT_PUBLIC_API_URL` deve apontar para o backend. Use `http://host.docker.internal:3000` se o backend estiver rodando no host, ou o endereço do container do backend se estiver na mesma rede Docker
+- Para produção, considere usar um arquivo `.env` ou variáveis de ambiente do sistema
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Exemplo com docker-compose (opcional)
+
+Se preferir usar docker-compose, você pode criar um arquivo `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+services:
+  frontend:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3000
+    depends_on:
+      - backend
+```
+
+## Estrutura do Projeto
+
+```
+app/
+├── (auth)/              # Rotas públicas (login)
+│   └── login/
+├── (dashboard)/         # Rotas protegidas (dashboard)
+│   ├── layout.tsx       # Layout com sidebar
+│   ├── page.tsx        # Dashboard principal
+│   └── history/        # Página de histórico
+components/
+├── ui/                  # Componentes shadcn/ui
+├── layout/              # Sidebar e Header
+├── forms/               # Formulários (entrada/saída)
+└── shared/              # Componentes compartilhados
+hooks/
+├── use-auth.ts          # Autenticação
+└── use-movements.ts     # Movimentações (React Query)
+lib/
+├── api.ts               # Configuração do Axios
+└── utils.ts             # Utilitários
+```
+
+## Funcionalidades
+
+### Autenticação
+
+- Login com usuário e senha
+- Proteção de rotas
+- Gerenciamento de sessão
+
+### Dashboard
+
+- Visualização do pátio ativo
+- Cards de resumo (Total no pátio, Visitantes, Saída parcial)
+- Tabela de movimentações ativas
+- Atualização automática a cada 30 segundos
+
+### Nova Entrada
+
+- Busca por CPF ou Placa
+- Preenchimento automático de dados existentes
+- Captura de foto via webcam
+- Suporte a entrada com ou sem veículo
+- Alerta de veículo abandonado
+
+### Saída
+
+- Saída completa (pessoa + veículo)
+- Saída parcial (apenas pessoa, veículo permanece no pátio)
+- Campos de NF e Lacre
+- Upload de fotos
+
+## Usuários Padrão
+
+- **Admin:** `username: admin` / `password: admin123`
+- **Operador:** `username: operador` / `password: operador123`
+
+## Desenvolvimento
+
+O projeto segue as boas práticas do Next.js 14+ com App Router:
+
+- Componentes Server e Client separados
+- React Query para gerenciamento de estado e cache
+- Validação de formulários com Zod
+- UI consistente com shadcn/ui
+- TypeScript para type safety
+
+## Próximos Passos
+
+- [ ] Implementar página de histórico completa
+- [ ] Adicionar filtros e busca avançada
+- [ ] Implementar relatórios
+- [ ] Adicionar configurações do sistema
+- [ ] Melhorar tratamento de erros
+- [ ] Adicionar testes

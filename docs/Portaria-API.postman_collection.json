@@ -1,0 +1,706 @@
+{
+	"info": {
+		"_postman_id": "portaria-api-collection",
+		"name": "Portaria API",
+		"description": "Collection completa da API de Controle de Portaria",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Autenticação",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+									"    pm.collectionVariables.set('userId', jsonData.user.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Realiza login e retorna token JWT"
+					},
+					"response": []
+				},
+				{
+					"name": "Registrar Usuário",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"novo_usuario\",\n  \"name\": \"Novo Usuário\",\n  \"password\": \"senha123\",\n  \"role\": \"OPERATOR\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Registra um novo usuário no sistema"
+					},
+					"response": []
+				},
+				{
+					"name": "Meu Perfil",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "me"]
+						},
+						"description": "Retorna informações do usuário autenticado"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Estatísticas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/dashboard/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["dashboard", "stats"]
+						},
+						"description": "Retorna estatísticas gerais do sistema"
+					},
+					"response": []
+				},
+				{
+					"name": "Lista do Pátio",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/dashboard/patio",
+							"host": ["{{baseUrl}}"],
+							"path": ["dashboard", "patio"]
+						},
+						"description": "Retorna lista detalhada de pessoas e veículos no pátio"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Pessoas",
+			"item": [
+				{
+					"name": "Buscar por CPF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/persons/cpf/:cpf",
+							"host": ["{{baseUrl}}"],
+							"path": ["persons", "cpf", ":cpf"],
+							"variable": [
+								{
+									"key": "cpf",
+									"value": "12345678900",
+									"description": "CPF da pessoa (apenas números)"
+								}
+							]
+						},
+						"description": "Busca uma pessoa pelo CPF"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Veículos",
+			"item": [
+				{
+					"name": "Buscar por Placa",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/vehicles/plate/:plate",
+							"host": ["{{baseUrl}}"],
+							"path": ["vehicles", "plate", ":plate"],
+							"variable": [
+								{
+									"key": "plate",
+									"value": "ABC1234",
+									"description": "Placa do veículo"
+								}
+							]
+						},
+						"description": "Busca um veículo pela placa"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Movimentações",
+			"item": [
+				{
+					"name": "Registrar Entrada",
+					"item": [
+						{
+							"name": "Entrada com Veículo",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"cpf\": \"12345678900\",\n  \"name\": \"João Silva\",\n  \"rg\": \"1234567\",\n  \"company\": \"Transportadora XYZ\",\n  \"photoUrl\": \"https://example.com/photo.jpg\",\n  \"personType\": \"DRIVER\",\n  \"plate\": \"ABC1234\",\n  \"vehicleModel\": \"Scania R450\",\n  \"vehicleColor\": \"Branco\",\n  \"vehicleType\": \"TRUCK\",\n  \"reason\": \"Entrega de carga\",\n  \"createdById\": \"{{userId}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/movements/entrance",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "entrance"]
+								},
+								"description": "Registra entrada de pessoa com veículo"
+							},
+							"response": []
+						},
+						{
+							"name": "Entrada sem Veículo (Pedestre)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"cpf\": \"98765432100\",\n  \"name\": \"Maria Santos\",\n  \"personType\": \"VISITOR\",\n  \"reason\": \"Visita técnica\",\n  \"createdById\": \"{{userId}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/movements/entrance",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "entrance"]
+								},
+								"description": "Registra entrada de pessoa sem veículo"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Registrar Saída",
+					"item": [
+						{
+							"name": "Saída Completa",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"movementId\": \"{{movementId}}\",\n  \"type\": \"FULL_EXIT\",\n  \"invoiceNumbers\": [\"00192\", \"00193\", \"00194\"],\n  \"sealNumber\": \"9988\",\n  \"photos\": [\n    \"https://example.com/photo1.jpg\",\n    \"https://example.com/photo2.jpg\"\n  ],\n  \"exitReason\": \"Entrega concluída\",\n  \"closedById\": \"{{userId}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/movements/exit",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "exit"]
+								},
+								"description": "Registra saída completa (pessoa + veículo)"
+							},
+							"response": []
+						},
+						{
+							"name": "Saída Parcial (Almoço)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{accessToken}}",
+										"type": "text",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"movementId\": \"{{movementId}}\",\n  \"type\": \"PARTIAL_EXIT\",\n  \"exitReason\": \"Almoço - retorno às 13h\",\n  \"closedById\": \"{{userId}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/movements/exit",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "exit"]
+								},
+								"description": "Registra saída parcial (apenas pessoa, veículo fica no pátio)"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Listar Pátio Ativo",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/movements/patio",
+							"host": ["{{baseUrl}}"],
+							"path": ["movements", "patio"]
+						},
+						"description": "Retorna lista de movimentos ativos no pátio"
+					},
+					"response": []
+				},
+				{
+					"name": "Histórico com Filtros",
+					"item": [
+						{
+							"name": "Todas as Movimentações (Ciclos)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1",
+											"description": "Número da página"
+										},
+										{
+											"key": "limit",
+											"value": "20",
+											"description": "Ciclos por página"
+										}
+									]
+								},
+								"description": "Retorna todos os ciclos de movimentação agrupados (mesma pessoa + mesmo veículo). Cada ciclo contém todas as movimentações relacionadas, incluindo saídas parciais e reentradas."
+							},
+							"response": []
+						},
+						{
+							"name": "Por Período",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?startDate=2024-01-15T00:00:00.000Z&endDate=2024-01-15T23:59:59.999Z&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "startDate",
+											"value": "2024-01-15T00:00:00.000Z",
+											"description": "Data inicial (ISO)"
+										},
+										{
+											"key": "endDate",
+											"value": "2024-01-15T23:59:59.999Z",
+											"description": "Data final (ISO)"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Busca ciclos de movimentação por período. Retorna ciclos agrupados por pessoa + veículo."
+							},
+							"response": []
+						},
+						{
+							"name": "Por CPF",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?cpf=12345678900&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "cpf",
+											"value": "12345678900",
+											"description": "CPF da pessoa"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Busca ciclos de movimentação por CPF. Retorna todos os ciclos de uma pessoa específica."
+							},
+							"response": []
+						},
+						{
+							"name": "Por Placa",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?plate=ABC1234&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "plate",
+											"value": "ABC1234",
+											"description": "Placa do veículo (busca por aproximação - ex: 'ABC' encontra 'ABC1234', 'ABC5678', etc.)"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Busca ciclos de movimentação por placa. Retorna todos os ciclos de um veículo específico."
+							},
+							"response": []
+						},
+						{
+							"name": "Apenas Ativas",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?status=active&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "status",
+											"value": "active",
+											"description": "Status do ciclo: active (ciclo ainda ativo) ou closed (ciclo finalizado com saída completa)"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Busca apenas ciclos ativos (ciclos que ainda não foram finalizados com saída completa)"
+							},
+							"response": []
+						},
+						{
+							"name": "Apenas Encerradas",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?status=closed&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "status",
+											"value": "closed",
+											"description": "Status do ciclo: active (ciclo ainda ativo) ou closed (ciclo finalizado com saída completa)"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Busca apenas ciclos finalizados (ciclos que terminaram com saída completa - veículo e motorista saíram juntos)"
+							},
+							"response": []
+						},
+						{
+							"name": "Por Número da NF",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?invoiceNumber=00192&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "invoiceNumber",
+											"value": "00192",
+											"description": "Número da Nota Fiscal (busca por aproximação - ex: '001' encontra '00192', '00193', etc.)"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Busca ciclos que contêm movimentações com o número da NF especificado"
+							},
+							"response": []
+						},
+						{
+							"name": "Filtros Combinados",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/movements/history?startDate=2024-01-15T00:00:00.000Z&endDate=2024-01-20T23:59:59.999Z&personType=DRIVER&vehicleType=TRUCK&status=closed&page=1&limit=20",
+									"host": ["{{baseUrl}}"],
+									"path": ["movements", "history"],
+									"query": [
+										{
+											"key": "startDate",
+											"value": "2024-01-15T00:00:00.000Z"
+										},
+										{
+											"key": "endDate",
+											"value": "2024-01-20T23:59:59.999Z"
+										},
+										{
+											"key": "personType",
+											"value": "DRIVER",
+											"description": "EMPLOYEE | VISITOR | DRIVER"
+										},
+										{
+											"key": "vehicleType",
+											"value": "TRUCK",
+											"description": "CAR | TRUCK | MOTORCYCLE | OTHER"
+										},
+										{
+											"key": "status",
+											"value": "closed"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Exemplo com múltiplos filtros combinados. Retorna ciclos agrupados que atendem a todos os critérios."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Buscar Detalhe do Ciclo",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/movements/cycle/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["movements", "cycle", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{movementId}}",
+									"description": "UUID de qualquer movimento do ciclo (pode ser o primeiro, último ou qualquer movimento intermediário)"
+								}
+							]
+						},
+						"description": "Busca o detalhe completo de um ciclo, incluindo todas as movimentações relacionadas (entrada inicial, saídas parciais, reentradas, saída final). Retorna todas as movimentações de uma pessoa + veículo em ordem cronológica."
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar Movimento Individual por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/movements/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["movements", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{movementId}}",
+									"description": "UUID do movimento individual"
+								}
+							]
+						},
+						"description": "Busca um movimento específico por ID (movimento individual, não o ciclo completo). Use GET /movements/cycle/:id para ver todas as movimentações do ciclo."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string",
+			"description": "Token JWT (preenchido automaticamente após login)"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string",
+			"description": "ID do usuário (preenchido automaticamente após login ou obter executando: node scripts/get-user-id.js)"
+		},
+		{
+			"key": "movementId",
+			"value": "",
+			"type": "string",
+			"description": "ID do movimento (obter da resposta de entrada). Pode ser usado em GET /movements/:id (movimento individual) ou GET /movements/cycle/:id (ciclo completo)"
+		},
+		{
+			"key": "cycleId",
+			"value": "",
+			"type": "string",
+			"description": "ID do ciclo (obter do campo cycleId na resposta de GET /movements/history). Usado em GET /movements/cycle/:id"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	}
+}
