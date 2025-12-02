@@ -133,6 +133,10 @@ export function ExitDialog({
     setPhotos((prev) => [...prev, imageSrc]);
   };
 
+  const handleRemovePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleAddInvoiceNumber = () => {
     if (newInvoiceNumber.trim()) {
       setInvoiceNumbers((prev) => [...prev, newInvoiceNumber.trim()]);
@@ -338,10 +342,17 @@ export function ExitDialog({
 
               {/* Seção: Fotos */}
               <div className="space-y-4 p-5 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Camera className="h-4 w-4" />
-                  Fotos da Carga/Lacre
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Camera className="h-4 w-4" />
+                    Fotos da Saída
+                  </h3>
+                  {photos.length > 0 && (
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {photos.length} {photos.length === 1 ? "foto" : "fotos"} adicionada{photos.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
                 {photos.length > 0 && (
                   <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                     {photos.map((photo, index) => (
@@ -353,26 +364,28 @@ export function ExitDialog({
                         />
                         <button
                           type="button"
-                          onClick={() =>
-                            setPhotos((prev) =>
-                              prev.filter((_, i) => i !== index)
-                            )
-                          }
+                          onClick={() => handleRemovePhoto(index)}
                           className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label={`Remover foto ${index + 1}`}
                         >
                           <X className="h-4 w-4" />
                         </button>
+                        <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded">
+                          Foto {index + 1}
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
-                <WebcamCapture onCapture={handlePhotoCapture} />
-                {photos.length === 0 && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-                    Capture fotos da carga e/ou lacre para documentação
+                <WebcamCapture onCapture={handlePhotoCapture} allowMultiple={true} />
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Você pode adicionar múltiplas fotos para documentar lacres, notas fiscais, veículo, etc.
                   </p>
-                )}
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">
+                    Clique em "Capturar Foto" para adicionar mais fotos
+                  </p>
+                </div>
               </div>
             </TabsContent>
 

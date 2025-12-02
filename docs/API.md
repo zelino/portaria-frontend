@@ -87,7 +87,11 @@ curl -X POST http://localhost:3000/auth/login \
 
 ### POST /auth/register
 
-Registra um novo usuário no sistema.
+Registra um novo usuário no sistema. **Apenas usuários com role ADMIN podem executar esta ação.**
+
+**Autenticação:** Requerida (JWT Bearer Token)
+
+**Autorização:** Apenas `ADMIN`
 
 **Payload:**
 
@@ -133,11 +137,45 @@ Registra um novo usuário no sistema.
 }
 ```
 
+**Resposta (401) - Não autenticado:**
+
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+**Resposta (403) - Sem permissão (não é ADMIN):**
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+
+**Resposta (409) - Usuário já existe:**
+
+```json
+{
+  "statusCode": 409,
+  "message": "Usuário já existe"
+}
+```
+
 **Exemplo cURL:**
 
 ```bash
+# Obter token de autenticação (ADMIN)
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.access_token')
+
+# Registrar novo usuário
 curl -X POST http://localhost:3000/auth/register \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "username": "novo_usuario",
     "name": "Novo Usuário",
@@ -215,57 +253,74 @@ curl -X GET http://localhost:3000/dashboard/stats
 
 ### GET /dashboard/patio
 
-Retorna lista detalhada de pessoas e veículos no pátio.
+Retorna lista detalhada de pessoas e veículos no pátio com paginação.
+
+**Query Parameters (todos opcionais):**
+
+- `page` (number): Número da página (padrão: 1, mínimo: 1)
+- `limit` (number): Itens por página (padrão: 20, mínimo: 1, máximo: 100)
 
 **Resposta:**
 
 ```json
-[
-  {
-    "id": "uuid",
-    "personId": "uuid",
-    "vehicleId": "uuid",
-    "enteredAt": "2024-01-15T10:30:00.000Z",
-    "exitedAt": null,
-    "vehicleStayOpen": false,
-    "reason": "Entrega de carga",
-    "person": {
+{
+  "data": [
+    {
       "id": "uuid",
-      "name": "João Silva",
-      "cpf": "12345678900",
-      "type": "DRIVER"
-    },
-    "vehicle": {
-      "id": "uuid",
-      "plate": "ABC1234",
-      "type": "TRUCK"
-    },
-    "createdBy": {
-      "id": "uuid",
-      "name": "Administrador",
-      "username": "admin"
+      "personId": "uuid",
+      "vehicleId": "uuid",
+      "enteredAt": "2024-01-15T10:30:00.000Z",
+      "exitedAt": null,
+      "vehicleStayOpen": false,
+      "reason": "Entrega de carga",
+      "person": {
+        "id": "uuid",
+        "name": "João Silva",
+        "document": "12345678900",
+        "type": "DRIVER"
+      },
+      "vehicle": {
+        "id": "uuid",
+        "plate": "ABC1234",
+        "type": "TRUCK"
+      },
+      "createdBy": {
+        "id": "uuid",
+        "name": "Administrador",
+        "username": "admin"
+      }
     }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 27,
+    "totalPages": 2
   }
-]
+}
 ```
 
 **Exemplo cURL:**
 
 ```bash
+# Listar primeira página (padrão: 20 itens)
 curl -X GET http://localhost:3000/dashboard/patio
+
+# Listar com paginação customizada
+curl -X GET "http://localhost:3000/dashboard/patio?page=1&limit=10"
 ```
 
 ---
 
 ## Pessoas
 
-### GET /persons/cpf/:cpf
+### GET /persons/document/:document
 
-Busca uma pessoa pelo CPF.
+Busca uma pessoa pelo documento.
 
 **Parâmetros:**
 
-- `cpf` (path): CPF da pessoa (apenas números)
+- `document` (path): Documento da pessoa (CPF, Passaporte, etc.)
 
 **Resposta (200):**
 
@@ -273,7 +328,7 @@ Busca uma pessoa pelo CPF.
 {
   "id": "uuid",
   "name": "João Silva",
-  "cpf": "12345678900",
+  "document": "12345678900",
   "rg": "1234567",
   "company": "Transportadora XYZ",
   "photoUrl": "https://example.com/photo.jpg",
@@ -292,7 +347,7 @@ null
 **Exemplo cURL:**
 
 ```bash
-curl -X GET http://localhost:3000/persons/cpf/12345678900
+curl -X GET http://localhost:3000/persons/document/12345678900
 ```
 
 ---
@@ -347,7 +402,7 @@ Registra uma entrada de pessoa (com ou sem veículo).
 
 ```json
 {
-  "cpf": "12345678900",
+  "document": "12345678900",
   "name": "João Silva",
   "rg": "1234567",
   "company": "Transportadora XYZ",
@@ -364,7 +419,7 @@ Registra uma entrada de pessoa (com ou sem veículo).
 
 **Campos obrigatórios:**
 
-- `cpf` (string): CPF da pessoa
+- `document` (string): Documento de identificação da pessoa (CPF, Passaporte, RG, etc.)
 - `name` (string): Nome da pessoa
 - `personType` (enum): `EMPLOYEE` | `VISITOR` | `DRIVER`
 - `createdById` (string): ID do usuário que está registrando
@@ -378,6 +433,7 @@ Registra uma entrada de pessoa (com ou sem veículo).
 - `vehicleModel` (string): Modelo do veículo
 - `vehicleColor` (string): Cor do veículo
 - `vehicleType` (enum): `CAR` | `TRUCK` | `MOTORCYCLE` | `OTHER` (obrigatório se `plate` for informado)
+- `trailerPlate` (string): Placa da carreta (opcional, quando houver)
 - `reason` (string): Motivo da entrada
 
 **Resposta (201):**
@@ -472,13 +528,14 @@ USER_ID=$(curl -s -X POST http://localhost:3000/auth/login \
 curl -X POST http://localhost:3000/movements/entrance \
   -H "Content-Type: application/json" \
   -d "{
-    \"cpf\": \"12345678900\",
+    \"document\": \"12345678900\",
     \"name\": \"João Silva\",
     \"personType\": \"DRIVER\",
     \"plate\": \"ABC1234\",
     \"vehicleModel\": \"Scania R450\",
     \"vehicleColor\": \"Branco\",
     \"vehicleType\": \"TRUCK\",
+    \"trailerPlate\": \"CARRETA123\",
     \"reason\": \"Entrega de carga\",
     \"createdById\": \"$USER_ID\"
   }"
@@ -493,7 +550,7 @@ USER_ID="uuid-do-usuario"
 curl -X POST http://localhost:3000/movements/entrance \
   -H "Content-Type: application/json" \
   -d "{
-    \"cpf\": \"98765432100\",
+    \"document\": \"98765432100\",
     \"name\": \"Maria Santos\",
     \"personType\": \"VISITOR\",
     \"reason\": \"Visita técnica\",
@@ -518,8 +575,11 @@ Registra uma saída (completa ou parcial).
   "invoiceNumbers": ["00192", "00193", "00194"],
   "sealNumber": "9988",
   "photos": [
-    "https://example.com/photo1.jpg",
-    "https://example.com/photo2.jpg"
+    "https://example.com/lacre1.jpg",
+    "https://example.com/lacre2.jpg",
+    "https://example.com/nf1.jpg",
+    "https://example.com/nf2.jpg",
+    "https://example.com/veiculo.jpg"
   ],
   "exitReason": "Entrega concluída",
   "closedById": "uuid-do-usuario"
@@ -537,7 +597,7 @@ Registra uma saída (completa ou parcial).
 
 - `invoiceNumbers` (string[]): Array de números das Notas Fiscais (pode ter nenhuma, uma ou múltiplas NFs)
 - `sealNumber` (string): Número do Lacre
-- `photos` (string[]): Array de URLs das fotos da saída
+- `photos` (string[]): **Array de URLs das fotos da saída** - Permite vincular múltiplas fotos para documentar lacres, notas fiscais, veículo, etc. (ex: `["https://example.com/lacre1.jpg", "https://example.com/lacre2.jpg", "https://example.com/nf1.jpg", "https://example.com/veiculo.jpg"]`)
 - `exitReason` (string): Opcional quando `type = FULL_EXIT` - Motivo da saída completa
 
 **Tipos de Saída:**
@@ -566,7 +626,13 @@ Registra uma saída (completa ou parcial).
   "vehicleStayOpen": false,
   "invoiceNumbers": ["00192", "00193", "00194"],
   "sealNumber": "9988",
-  "exitPhotos": ["https://example.com/photo1.jpg"],
+  "exitPhotos": [
+    "https://example.com/lacre1.jpg",
+    "https://example.com/lacre2.jpg",
+    "https://example.com/nf1.jpg",
+    "https://example.com/nf2.jpg",
+    "https://example.com/veiculo.jpg"
+  ],
   "exitReason": "Entrega concluída",
   "person": { ... },
   "vehicle": { ... },
@@ -589,7 +655,13 @@ curl -X POST http://localhost:3000/movements/exit \
     \"type\": \"FULL_EXIT\",
     \"invoiceNumbers\": [\"00192\", \"00193\", \"00194\"],
     \"sealNumber\": \"9988\",
-    \"photos\": [\"https://example.com/photo1.jpg\"],
+    \"photos\": [
+      \"https://example.com/lacre1.jpg\",
+      \"https://example.com/lacre2.jpg\",
+      \"https://example.com/nf1.jpg\",
+      \"https://example.com/nf2.jpg\",
+      \"https://example.com/veiculo.jpg\"
+    ],
     \"closedById\": \"$USER_ID\"
   }"
 ```
@@ -641,44 +713,61 @@ curl -X POST http://localhost:3000/movements/exit \
 
 ### GET /movements/patio
 
-Retorna lista de movimentos ativos no pátio (pessoas e veículos que ainda não saíram).
+Retorna lista de movimentos ativos no pátio (pessoas e veículos que ainda não saíram) com paginação.
+
+**Query Parameters (todos opcionais):**
+
+- `page` (number): Número da página (padrão: 1, mínimo: 1)
+- `limit` (number): Itens por página (padrão: 20, mínimo: 1, máximo: 100)
 
 **Resposta:**
 
 ```json
-[
-  {
-    "id": "uuid",
-    "personId": "uuid",
-    "vehicleId": "uuid",
-    "enteredAt": "2024-01-15T10:30:00.000Z",
-    "exitedAt": null,
-    "vehicleStayOpen": false,
-    "reason": "Entrega de carga",
-    "person": {
+{
+  "data": [
+    {
       "id": "uuid",
-      "name": "João Silva",
-      "cpf": "12345678900",
-      "type": "DRIVER"
-    },
-    "vehicle": {
-      "id": "uuid",
-      "plate": "ABC1234",
-      "type": "TRUCK"
-    },
-    "createdBy": {
-      "id": "uuid",
-      "name": "Administrador",
-      "username": "admin"
+      "personId": "uuid",
+      "vehicleId": "uuid",
+      "enteredAt": "2024-01-15T10:30:00.000Z",
+      "exitedAt": null,
+      "vehicleStayOpen": false,
+      "reason": "Entrega de carga",
+      "person": {
+        "id": "uuid",
+        "name": "João Silva",
+        "document": "12345678900",
+        "type": "DRIVER"
+      },
+      "vehicle": {
+        "id": "uuid",
+        "plate": "ABC1234",
+        "type": "TRUCK"
+      },
+      "createdBy": {
+        "id": "uuid",
+        "name": "Administrador",
+        "username": "admin"
+      }
     }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 27,
+    "totalPages": 2
   }
-]
+}
 ```
 
 **Exemplo cURL:**
 
 ```bash
+# Listar primeira página (padrão: 20 itens)
 curl -X GET http://localhost:3000/movements/patio
+
+# Listar com paginação customizada
+curl -X GET "http://localhost:3000/movements/patio?page=1&limit=10"
 ```
 
 ---
@@ -688,6 +777,7 @@ curl -X GET http://localhost:3000/movements/patio
 Retorna o histórico completo de movimentações agrupadas em **ciclos** com filtros opcionais e paginação.
 
 **Conceito de Ciclo:**
+
 - Um ciclo agrupa todas as movimentações de uma **mesma pessoa + mesmo veículo**
 - Um ciclo começa com uma entrada e termina quando há uma **saída completa** (veículo e motorista saem juntos)
 - Saídas parciais e reentradas fazem parte do mesmo ciclo
@@ -699,7 +789,7 @@ Retorna o histórico completo de movimentações agrupadas em **ciclos** com fil
 
 - `startDate` (string, ISO date): Data inicial do período (ex: `2024-01-15T00:00:00.000Z`)
 - `endDate` (string, ISO date): Data final do período (ex: `2024-01-15T23:59:59.999Z`)
-- `cpf` (string): CPF da pessoa (busca exata, apenas números ou com formatação)
+- `document` (string): Documento da pessoa (CPF, Passaporte, etc.) - busca exata, apenas números ou com formatação
 - `plate` (string): Placa do veículo - **busca por aproximação** (ex: `ABC` encontra `ABC1234`, `ABC5678`, etc.)
 - `personType` (enum): Tipo de pessoa - `EMPLOYEE` | `VISITOR` | `DRIVER`
 - `vehicleType` (enum): Tipo de veículo - `CAR` | `TRUCK` | `MOTORCYCLE` | `OTHER`
@@ -719,7 +809,7 @@ Retorna o histórico completo de movimentações agrupadas em **ciclos** com fil
       "person": {
         "id": "uuid",
         "name": "João Silva",
-        "cpf": "12345678900",
+        "document": "12345678900",
         "type": "DRIVER"
       },
       "vehicle": {
@@ -802,10 +892,10 @@ curl -X GET "http://localhost:3000/movements/history"
 curl -X GET "http://localhost:3000/movements/history?startDate=2024-01-15T00:00:00.000Z&endDate=2024-01-15T23:59:59.999Z"
 ```
 
-**Buscar por CPF:**
+**Buscar por documento:**
 
 ```bash
-curl -X GET "http://localhost:3000/movements/history?cpf=12345678900"
+curl -X GET "http://localhost:3000/movements/history?document=12345678900"
 ```
 
 **Buscar por placa (aproximação):**
@@ -881,7 +971,7 @@ Busca o detalhe completo de um ciclo (todas as movimentações de uma pessoa + v
   "person": {
     "id": "uuid",
     "name": "João Silva",
-    "cpf": "12345678900",
+    "document": "12345678900",
     "type": "DRIVER"
   },
   "vehicle": {
@@ -947,12 +1037,18 @@ Busca um movimento específico por ID (movimento individual, não o ciclo comple
   "vehicleStayOpen": false,
   "invoiceNumbers": ["00192", "00193"],
   "sealNumber": "9988",
-  "exitPhotos": ["https://example.com/photo1.jpg"],
+  "exitPhotos": [
+    "https://example.com/lacre1.jpg",
+    "https://example.com/lacre2.jpg",
+    "https://example.com/nf1.jpg",
+    "https://example.com/nf2.jpg",
+    "https://example.com/veiculo.jpg"
+  ],
   "exitReason": "Entrega concluída",
   "person": {
     "id": "uuid",
     "name": "João Silva",
-    "cpf": "12345678900",
+    "document": "12345678900",
     "type": "DRIVER"
   },
   "vehicle": {
@@ -986,6 +1082,68 @@ Busca um movimento específico por ID (movimento individual, não o ciclo comple
 
 ```bash
 curl -X GET http://localhost:3000/movements/uuid-do-movimento
+```
+
+---
+
+### DELETE /movements/:id
+
+Exclui um movimento do sistema. **Apenas usuários com role ADMIN podem executar esta ação.**
+
+**Autenticação:** Requerida (JWT Bearer Token)
+
+**Autorização:** Apenas `ADMIN`
+
+**Parâmetros:**
+
+- `id` (path): UUID do movimento
+
+**Resposta (200):**
+
+```json
+{
+  "message": "Movimento excluído com sucesso"
+}
+```
+
+**Resposta (404) - Movimento não encontrado:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Movimento não encontrado"
+}
+```
+
+**Resposta (401) - Não autenticado:**
+
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+**Resposta (403) - Sem permissão (não é ADMIN):**
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+
+**Exemplo cURL:**
+
+```bash
+# Obter token de autenticação
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.access_token')
+
+# Excluir movimento
+curl -X DELETE http://localhost:3000/movements/uuid-do-movimento \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -1031,7 +1189,15 @@ curl -X GET http://localhost:3000/movements/uuid-do-movimento
 
 ## Autenticação nos Endpoints
 
-**Nota:** Atualmente, os endpoints de movimentação não requerem autenticação JWT, mas utilizam `createdById` e `closedById` para auditoria. Para usar esses campos:
+**Nota:** A maioria dos endpoints de movimentação não requer autenticação JWT, mas utilizam `createdById` e `closedById` para auditoria.
+
+**Endpoints que requerem autenticação JWT e role ADMIN:**
+
+- `POST /auth/register` - Registrar novo usuário
+- `DELETE /movements/:id` - Excluir movimento
+- `DELETE /persons/:id` - Excluir pessoa
+
+Para usar esses campos:
 
 1. **Opção 1 - Usar ID do usuário diretamente:**
 

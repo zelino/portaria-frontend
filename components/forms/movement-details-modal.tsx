@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +8,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -20,8 +32,13 @@ import {
   Building,
   FileText,
   Camera,
-  UserCircle
+  UserCircle,
+  Trash2,
+  Loader2
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useDeleteMovement } from "@/hooks/use-movements";
+import { useToast } from "@/hooks/use-toast";
 
 interface MovementDetailsModalProps {
   open: boolean;
@@ -43,19 +60,62 @@ export function MovementDetailsModal({
   onOpenChange,
   movement,
 }: MovementDetailsModalProps) {
+  const { data: user } = useAuth();
+  const deleteMovement = useDeleteMovement();
+  const { toast } = useToast();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const isAdmin = user?.role === "ADMIN";
+
+  const handleDelete = async () => {
+    if (!movement?.id) return;
+
+    try {
+      await deleteMovement.mutateAsync(movement.id);
+      toast({
+        title: "Sucesso",
+        description: "Movimento excluído com sucesso",
+      });
+      setShowDeleteDialog(false);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.response?.data?.message || "Erro ao excluir movimento",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!movement) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 w-[95vw] sm:w-full">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 w-[95vw] sm:w-full">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserCircle className="h-5 w-5" />
-            Detalhes da Movimentação
-          </DialogTitle>
-          <DialogDescription>
-            Informações completas da movimentação
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <UserCircle className="h-5 w-5" />
+                Detalhes da Movimentação
+              </DialogTitle>
+              <DialogDescription>
+                Informações completas da movimentação
+              </DialogDescription>
+            </div>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
@@ -113,9 +173,9 @@ export function MovementDetailsModal({
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">CPF:</span>
+                    <span className="text-slate-600 dark:text-slate-400">Documento:</span>
                     <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {movement.person?.cpf || "-"}
+                      {movement.person?.document || movement.person?.cpf || "-"}
                     </span>
                   </div>
                   {movement.person?.rg && (
@@ -256,7 +316,7 @@ export function MovementDetailsModal({
           </div>
 
           {/* Fotos */}
-          {(movement.person?.photoUrl || movement.photos?.length > 0) && (
+          {(movement.person?.photoUrl || movement.exitPhotos?.length > 0 || movement.photos?.length > 0) && (
             <div className="space-y-4 p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
               <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Camera className="h-4 w-4" />
@@ -273,10 +333,15 @@ export function MovementDetailsModal({
                     />
                   </div>
                 )}
-                {movement.photos?.map((photo: string, index: number) => (
+                {(movement.exitPhotos || movement.photos || [])?.map((photo: string, index: number) => (
                   <div key={index}>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
                       Foto de Saída {index + 1}
+                      {movement.exitPhotos && movement.exitPhotos.length > 1 && (
+                        <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                          (Lacre, NF ou Veículo)
+                        </span>
+                      )}
                     </p>
                     <img
                       src={photo}
@@ -289,7 +354,41 @@ export function MovementDetailsModal({
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir Movimento</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir este movimento? Esta ação não pode ser desfeita.
+            {movement?.person?.name && (
+              <span className="block mt-2 font-medium">
+                Movimento de: {movement.person.name}
+              </span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteMovement.isPending}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {deleteMovement.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Excluindo...
+              </>
+            ) : (
+              "Excluir"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

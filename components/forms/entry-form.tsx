@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useCreateEntrance, usePersonByCpf, useVehicleByPlate } from "@/hooks/use-movements";
+import { useCreateEntrance, usePersonByDocument, useVehicleByPlate } from "@/hooks/use-movements";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Dialog,
@@ -27,22 +27,19 @@ import { WebcamCapture } from "@/components/shared/webcam-capture";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Search, Loader2, AlertCircle, ArrowRightCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { maskCPF, unmaskCPF, maskPlate, unmaskPlate, validateCPF, validatePlate } from "@/lib/masks";
+import { maskCPF, unmaskCPF, maskPlate, unmaskPlate } from "@/lib/masks";
 import { VehicleAbandonedWarningModal } from "./vehicle-abandoned-warning-modal";
 import { MovementDetailsModal } from "./movement-details-modal";
 import { useMovementById } from "@/hooks/use-movements";
 
 const entrySchema = z.object({
-  cpf: z.string()
-    .min(11, "CPF deve ter 11 dígitos")
-    .refine((val) => validateCPF(val), "CPF inválido"),
+  document: z.string().min(1, "Documento é obrigatório"),
   name: z.string().min(1, "Nome é obrigatório").min(3, "Nome deve ter pelo menos 3 caracteres"),
   rg: z.string().optional(),
   company: z.string().optional(),
   personType: z.enum(["EMPLOYEE", "VISITOR", "DRIVER"]),
-  plate: z.string()
-    .optional()
-    .refine((val) => !val || validatePlate(val), "Placa inválida"),
+  plate: z.string().optional(),
+  trailerPlate: z.string().optional(),
   vehicleModel: z.string().optional(),
   vehicleColor: z.string().optional(),
   vehicleType: z.enum(["CAR", "TRUCK", "MOTORCYCLE", "OTHER"]).optional(),
@@ -57,7 +54,7 @@ interface EntryDialogProps {
   onOpenChange: (open: boolean) => void;
   onViewMovement?: (movementId: string) => void;
   prefillData?: {
-    cpf?: string;
+    document?: string;
     name?: string;
     plate?: string;
     vehicleModel?: string;
@@ -68,7 +65,7 @@ interface EntryDialogProps {
 
 export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }: EntryDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState<"cpf" | "plate">("cpf");
+  const [searchType, setSearchType] = useState<"document" | "plate">("document");
   const [photo, setPhoto] = useState<string | null>(null);
   const [vehicleAbandonedData, setVehicleAbandonedData] = useState<any>(null);
   const [showVehicleWarning, setShowVehicleWarning] = useState(false);
@@ -81,11 +78,11 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   // Buscar movimento anterior quando necessário
   const { data: previousMovement } = useMovementById(previousMovementId);
 
-  const { data: personData } = usePersonByCpf(
-    searchType === "cpf" && searchQuery.length >= 11 ? searchQuery : null
+  const { data: personData } = usePersonByDocument(
+    searchType === "document" && searchQuery.length > 0 ? searchQuery : null
   );
   const { data: vehicleData } = useVehicleByPlate(
-    searchType === "plate" && searchQuery.length >= 6 ? searchQuery : null
+    searchType === "plate" && searchQuery.length > 0 ? searchQuery : null
   );
 
   const {
@@ -106,12 +103,12 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
 
   const plate = watch("plate");
   const personType = watch("personType");
-  const cpf = watch("cpf");
+  const document = watch("document");
 
   // Preencher dados quando encontrar pessoa ou veículo
   useEffect(() => {
     if (personData) {
-      setValue("cpf", personData.cpf, { shouldValidate: true });
+      setValue("document", personData.document || personData.cpf || "", { shouldValidate: true });
       setValue("name", personData.name, { shouldValidate: true });
       setValue("rg", personData.rg || "");
       setValue("company", personData.company || "");
@@ -123,17 +120,17 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   // Preencher dados quando prefillData for fornecido
   useEffect(() => {
     if (prefillData && open) {
-      if (prefillData.cpf) {
-        setValue("cpf", prefillData.cpf, { shouldValidate: true });
-        setSearchQuery(prefillData.cpf);
-        setSearchType("cpf");
+      if (prefillData.document) {
+        setValue("document", prefillData.document, { shouldValidate: true });
+        setSearchQuery(prefillData.document);
+        setSearchType("document");
       }
       if (prefillData.name) {
         setValue("name", prefillData.name, { shouldValidate: true });
       }
       if (prefillData.plate) {
         setValue("plate", prefillData.plate, { shouldValidate: true });
-        if (!prefillData.cpf) {
+        if (!prefillData.document) {
           setSearchQuery(prefillData.plate);
           setSearchType("plate");
         }
@@ -159,23 +156,27 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
     }
   }, [vehicleData, setValue]);
 
-  // Aplicar máscaras nos inputs
-  const handleCPFChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const unmasked = unmaskCPF(e.target.value);
-    if (unmasked.length <= 11) {
-      const masked = maskCPF(unmasked);
-      setValue("cpf", unmasked, { shouldValidate: true });
+  // Aplicar máscaras nos inputs (opcional, apenas para formatação visual)
+  const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Aplica máscara de CPF apenas se parecer com CPF (11 dígitos numéricos)
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 11) {
+      const masked = maskCPF(value);
+      setValue("document", numbers, { shouldValidate: true });
       e.target.value = masked;
+    } else {
+      // Para outros documentos, mantém como está
+      setValue("document", value, { shouldValidate: true });
     }
   };
 
   const handlePlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const unmasked = unmaskPlate(e.target.value);
-    if (unmasked.length <= 7) {
-      const masked = maskPlate(unmasked);
-      setValue("plate", unmasked, { shouldValidate: true });
-      e.target.value = masked;
-    }
+    const value = e.target.value.toUpperCase();
+    // Remove caracteres especiais mas mantém o valor original para placas internacionais
+    const cleaned = value.replace(/[^A-Z0-9]/gi, "");
+    setValue("plate", cleaned, { shouldValidate: true });
+    e.target.value = value;
   };
 
   // Verificar veículo abandonado
@@ -199,8 +200,9 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
     try {
       const payload = {
         ...data,
-        cpf: unmaskCPF(data.cpf), // Garantir que CPF está sem máscara
-        plate: data.plate ? unmaskPlate(data.plate) : undefined, // Garantir que placa está sem máscara
+        document: data.document.replace(/\D/g, ""), // Remove formatação mas mantém o valor
+        plate: data.plate ? data.plate.replace(/[^A-Z0-9]/gi, "").toUpperCase() : undefined,
+        trailerPlate: data.trailerPlate ? data.trailerPlate.replace(/[^A-Z0-9]/gi, "").toUpperCase() : undefined,
         photoUrl: photo || undefined,
         createdById: user.id,
       };
@@ -238,7 +240,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
     reset({
       personType: "DRIVER",
       ...(prefillData && {
-        cpf: prefillData.cpf || "",
+        document: prefillData.document || "",
         name: prefillData.name || "",
         plate: prefillData.plate || "",
         vehicleModel: prefillData.vehicleModel || "",
@@ -337,14 +339,14 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
             <div className="flex flex-col sm:flex-row gap-3">
               <Select
                 value={searchType}
-                onValueChange={(v: "cpf" | "plate") => setSearchType(v)}
+                onValueChange={(v: "document" | "plate") => setSearchType(v)}
                 aria-label="Tipo de busca"
               >
                 <SelectTrigger className="w-full sm:w-36 h-11 border-2 border-slate-300 dark:border-slate-600" aria-label="Selecione tipo de busca">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cpf">CPF</SelectItem>
+                  <SelectItem value="document">Documento</SelectItem>
                   <SelectItem value="plate">Placa</SelectItem>
                 </SelectContent>
               </Select>
@@ -354,16 +356,16 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
                   aria-hidden="true"
                 />
                 <Input
-                  placeholder={`Digite ${searchType === "cpf" ? "CPF" : "Placa"}`}
+                  placeholder={`Digite ${searchType === "document" ? "Documento (CPF, Passaporte, etc.)" : "Placa"}`}
                   value={searchQuery}
                   onChange={(e) => {
-                    const value = searchType === "cpf"
-                      ? unmaskCPF(e.target.value)
-                      : unmaskPlate(e.target.value);
+                    const value = searchType === "document"
+                      ? e.target.value
+                      : e.target.value.toUpperCase();
                     setSearchQuery(value);
                   }}
                   className="pl-11"
-                  aria-label={`Campo de busca por ${searchType === "cpf" ? "CPF" : "Placa"}`}
+                  aria-label={`Campo de busca por ${searchType === "document" ? "Documento" : "Placa"}`}
                 />
               </div>
             </div>
@@ -376,36 +378,35 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
                 Dados Pessoais
               </legend>
               <div className="space-y-2">
-                <Label htmlFor="cpf" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  CPF <span className="text-red-500" aria-label="obrigatório">*</span>
+                <Label htmlFor="document" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Documento <span className="text-red-500" aria-label="obrigatório">*</span>
                 </Label>
                 <Input
-                  id="cpf"
-                  {...register("cpf")}
+                  id="document"
+                  {...register("document")}
                   onChange={(e) => {
-                    handleCPFChange(e);
-                    register("cpf").onChange(e);
+                    handleDocumentChange(e);
+                    register("document").onChange(e);
                   }}
-                  placeholder="000.000.000-00"
-                  maxLength={14}
-                  aria-label="Campo de CPF"
+                  placeholder="CPF, Passaporte, RG, etc."
+                  aria-label="Campo de documento"
                   aria-required="true"
-                  aria-invalid={errors.cpf ? "true" : "false"}
-                  aria-describedby={errors.cpf ? "cpf-error" : "cpf-help"}
-                  className={errors.cpf ? "border-red-500 dark:border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}
+                  aria-invalid={errors.document ? "true" : "false"}
+                  aria-describedby={errors.document ? "document-error" : "document-help"}
+                  className={errors.document ? "border-red-500 dark:border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}
                 />
-                {errors.cpf ? (
+                {errors.document ? (
                   <p
-                    id="cpf-error"
+                    id="document-error"
                     className="text-sm text-destructive flex items-center gap-1"
                     role="alert"
                   >
                     <AlertCircle className="h-3 w-3" aria-hidden="true" />
-                    {errors.cpf.message}
+                    {errors.document.message}
                   </p>
                 ) : (
-                  <p id="cpf-help" className="text-xs text-slate-500 dark:text-slate-400">
-                    Digite apenas números
+                  <p id="document-help" className="text-xs text-slate-500 dark:text-slate-400">
+                    CPF, Passaporte, RG ou outro documento de identificação
                   </p>
                 )}
               </div>
@@ -479,7 +480,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
                 Dados do Veículo <span className="text-sm font-normal text-slate-500 dark:text-slate-400">(Opcional)</span>
               </legend>
               <div className="space-y-2">
-                <Label htmlFor="plate" className="text-sm font-medium text-slate-700 dark:text-slate-300">Placa</Label>
+                <Label htmlFor="plate" className="text-sm font-medium text-slate-700 dark:text-slate-300">Placa do Veículo</Label>
                 <Input
                   id="plate"
                   {...register("plate")}
@@ -487,28 +488,36 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
                     handlePlateChange(e);
                     register("plate").onChange(e);
                   }}
-                  placeholder="ABC-1234 ou ABC1D23"
-                  maxLength={8}
+                  placeholder="Ex: ABC1234, ABC-1234, ABC1D23 (aceita placas internacionais)"
                   aria-label="Campo de placa do veículo"
                   aria-invalid={errors.plate ? "true" : "false"}
-                  aria-describedby={errors.plate ? "plate-error" : "plate-help"}
-                  className={`uppercase ${errors.plate ? "border-red-500 dark:border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                  className="uppercase"
                 />
-                {errors.plate ? (
-                  <p
-                    id="plate-error"
-                    className="text-sm text-destructive flex items-center gap-1"
-                    role="alert"
-                  >
-                    <AlertCircle className="h-3 w-3" aria-hidden="true" />
-                    {errors.plate.message}
-                  </p>
-                ) : (
-                  <p id="plate-help" className="text-xs text-slate-500 dark:text-slate-400">
-                    Formato: ABC-1234 ou ABC1D23
-                  </p>
-                )}
+                <p id="plate-help" className="text-xs text-slate-500 dark:text-slate-400">
+                  Placa do veículo (aceita formatos brasileiros e internacionais)
+                </p>
               </div>
+              {plate && (
+                <div className="space-y-2">
+                  <Label htmlFor="trailerPlate" className="text-sm font-medium text-slate-700 dark:text-slate-300">Placa da Carreta</Label>
+                  <Input
+                    id="trailerPlate"
+                    {...register("trailerPlate")}
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      const cleaned = value.replace(/[^A-Z0-9]/gi, "");
+                      setValue("trailerPlate", cleaned, { shouldValidate: true });
+                      e.target.value = value;
+                    }}
+                    placeholder="Ex: CARRETA123 (opcional)"
+                    aria-label="Campo de placa da carreta"
+                    className="uppercase"
+                  />
+                  <p id="trailerPlate-help" className="text-xs text-slate-500 dark:text-slate-400">
+                    Placa da carreta quando houver (opcional)
+                  </p>
+                </div>
+              )}
               {plate && (
                 <>
                   <div className="space-y-2">

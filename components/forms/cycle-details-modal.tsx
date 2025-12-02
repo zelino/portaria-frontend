@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +8,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -23,7 +35,12 @@ import {
   UserCircle,
   ArrowRight,
   ArrowLeft,
+  Trash2,
+  Loader2,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useDeleteMovement } from "@/hooks/use-movements";
+import { useToast } from "@/hooks/use-toast";
 
 interface CycleDetailsModalProps {
   open: boolean;
@@ -45,21 +62,54 @@ export function CycleDetailsModal({
   onOpenChange,
   cycle,
 }: CycleDetailsModalProps) {
+  const { data: user } = useAuth();
+  const deleteMovement = useDeleteMovement();
+  const { toast } = useToast();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [movementToDelete, setMovementToDelete] = useState<string | null>(null);
+  const isAdmin = user?.role === "ADMIN";
+
+  const handleDeleteClick = (movementId: string) => {
+    setMovementToDelete(movementId);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDelete = async () => {
+    if (!movementToDelete) return;
+
+    try {
+      await deleteMovement.mutateAsync(movementToDelete);
+      toast({
+        title: "Sucesso",
+        description: "Movimento excluído com sucesso",
+      });
+      setShowDeleteDialog(false);
+      setMovementToDelete(null);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.response?.data?.message || "Erro ao excluir movimento",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!cycle) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 w-[95vw] sm:w-full">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserCircle className="h-5 w-5" />
-            Detalhes do Ciclo de Movimentação
-          </DialogTitle>
-          <DialogDescription>
-            Todas as movimentações de {cycle.person?.name || "N/A"} com o veículo{" "}
-            {cycle.vehicle?.plate || "sem veículo"}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 w-[95vw] sm:w-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCircle className="h-5 w-5" />
+              Detalhes do Ciclo de Movimentação
+            </DialogTitle>
+            <DialogDescription>
+              Todas as movimentações de {cycle.person?.name || "N/A"} com o veículo{" "}
+              {cycle.vehicle?.plate || "sem veículo"}
+            </DialogDescription>
+          </DialogHeader>
 
         <div className="space-y-6 mt-4">
           {/* Status e Informações Principais do Ciclo */}
@@ -110,9 +160,9 @@ export function CycleDetailsModal({
                   </p>
                 </div>
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400">CPF:</span>
+                  <span className="text-slate-500 dark:text-slate-400">Documento:</span>
                   <p className="font-medium text-slate-900 dark:text-slate-100">
-                    {cycle.person?.cpf || "-"}
+                    {cycle.person?.document || cycle.person?.cpf || "-"}
                   </p>
                 </div>
                 <div>
@@ -172,6 +222,17 @@ export function CycleDetailsModal({
                         Movimentação {index + 1} de {cycle.movements.length}
                       </span>
                     </div>
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteClick(movement.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
 
                   <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 mt-3">
@@ -263,6 +324,45 @@ export function CycleDetailsModal({
                       )}
                     </div>
                   )}
+
+                  {/* Fotos do Movimento */}
+                  {(movement.person?.photoUrl || movement.exitPhotos?.length > 0 || movement.photos?.length > 0) && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-3">
+                        <Camera className="h-4 w-4" />
+                        Fotos
+                      </h4>
+                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                        {movement.person?.photoUrl && (
+                          <div>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">Foto de Entrada</p>
+                            <img
+                              src={movement.person.photoUrl}
+                              alt="Foto de entrada"
+                              className="w-full h-48 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                            />
+                          </div>
+                        )}
+                        {(movement.exitPhotos || movement.photos || [])?.map((photo: string, photoIndex: number) => (
+                          <div key={photoIndex}>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                              Foto de Saída {photoIndex + 1}
+                              {movement.exitPhotos && movement.exitPhotos.length > 1 && (
+                                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                                  (Lacre, NF ou Veículo)
+                                </span>
+                              )}
+                            </p>
+                            <img
+                              src={photo}
+                              alt={`Foto de saída ${photoIndex + 1}`}
+                              className="w-full h-48 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -270,5 +370,34 @@ export function CycleDetailsModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir Movimento</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir este movimento do ciclo? Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteMovement.isPending}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {deleteMovement.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Excluindo...
+              </>
+            ) : (
+              "Excluir"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

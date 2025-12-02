@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Truck, User, Clock, Inbox, Package, LogOut, Eye, ArrowRightCircle, RotateCcw } from "lucide-react";
+import { Truck, User, Clock, Inbox, Package, LogOut, Eye, ArrowRightCircle, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EntryDialog } from "@/components/forms/entry-form";
 import { ExitDialog } from "@/components/forms/exit-modal";
@@ -41,8 +41,12 @@ export default function DashboardPage() {
   const [selectedMovement, setSelectedMovement] = useState<any>(null);
   const [previousMovementId, setPreviousMovementId] = useState<string | null>(null);
   const [entryPrefillData, setEntryPrefillData] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
-  const { data: patio, isLoading: isLoadingPatio } = useActivePatio();
+  const { data: patioData, isLoading: isLoadingPatio } = useActivePatio({ page, limit });
+  const patio = patioData?.data || [];
+  const pagination = patioData?.pagination;
   const { data: stats, isLoading: isLoadingStats } = useDashboardStats();
 
   // Buscar movimento anterior quando necessário
@@ -67,7 +71,7 @@ export default function DashboardPage() {
   const handleQuickEntry = (movement: any) => {
     // Pré-preencher dados da saída parcial para entrada rápida
     setEntryPrefillData({
-      cpf: movement.person?.cpf,
+      document: movement.person?.document || movement.person?.cpf,
       name: movement.person?.name,
       plate: movement.vehicle?.plate,
       vehicleModel: movement.vehicle?.model,
@@ -146,12 +150,12 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingStats ? (
+              {isLoadingStats || isLoadingPatio ? (
                 <Skeleton className="h-10 w-24" />
               ) : (
                 <div className="space-y-1">
                   <div className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-                    {(patio || []).filter((m: any) => m.vehicleStayOpen).length}
+                    {Array.isArray(patio) ? patio.filter((m: any) => m.vehicleStayOpen).length : 0}
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">veículos sem motorista</p>
                 </div>
@@ -173,7 +177,7 @@ export default function DashboardPage() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : !patio || patio.length === 0 ? (
+            ) : !patio || !Array.isArray(patio) || patio.length === 0 ? (
               <div
                 className="text-center py-16 px-4"
                 role="status"
@@ -230,7 +234,7 @@ export default function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {patio.map((movement: any) => {
+                      {Array.isArray(patio) && patio.map((movement: any) => {
                         const isPartialExit = movement.vehicleStayOpen && movement.exitedAt;
                         return (
                         <TableRow
@@ -370,7 +374,7 @@ export default function DashboardPage() {
 
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-3">
-                  {patio.map((movement: any) => {
+                  {Array.isArray(patio) && patio.map((movement: any) => {
                     const isPartialExit = movement.vehicleStayOpen && movement.exitedAt;
                     return (
                       <Card
@@ -491,6 +495,65 @@ export default function DashboardPage() {
               </>
             )}
           </CardContent>
+          {/* Paginação */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between bg-white dark:bg-slate-800">
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                <span>
+                  Mostrando {((pagination.page - 1) * pagination.limit) + 1} a{" "}
+                  {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={pagination.page === 1 || isLoadingPatio}
+                  className="h-9 px-3"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pagination.page === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setPage(pageNum)}
+                        disabled={isLoadingPatio}
+                        className="h-9 w-9 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                  disabled={pagination.page === pagination.totalPages || isLoadingPatio}
+                  className="h-9 px-3"
+                >
+                  Próxima
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 

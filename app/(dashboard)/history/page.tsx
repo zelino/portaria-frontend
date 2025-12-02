@@ -55,7 +55,7 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-type SearchType = "cpf" | "plate" | "invoice" | null;
+type SearchType = "document" | "plate" | "invoice" | null;
 
 function detectSearchType(value: string): SearchType {
   if (!value.trim()) return null;
@@ -72,18 +72,13 @@ function detectSearchType(value: string): SearchType {
     }
   }
 
-  // CPF: exatamente 11 dígitos
-  if (clean.length === 11 && /^\d{11}$/.test(clean)) {
-    return "cpf";
+  // Documento: números (pode ser CPF, RG, etc.)
+  if (clean.length >= 8 && !hasLetters) {
+    return "document";
   }
 
-  // Durante digitação de CPF (mais de 8 dígitos, só números)
-  if (clean.length > 8 && clean.length < 11 && !hasLetters) {
-    return "cpf";
-  }
-
-  // NF: números menores que 8 dígitos (para não confundir com CPF em digitação)
-  if (clean.length > 0 && clean.length <= 8 && !hasLetters) {
+  // NF: números menores que 8 dígitos
+  if (clean.length > 0 && clean.length < 8 && !hasLetters) {
     return "invoice";
   }
 
@@ -124,8 +119,14 @@ export default function HistoryPage() {
     const currentType = selectedSearchType || detectSearchType(value);
 
     // Aplica máscara baseada no tipo
-    if (currentType === "cpf") {
-      formatted = maskCPF(value);
+    if (currentType === "document") {
+      // Aplica máscara de CPF apenas se parecer com CPF (11 dígitos)
+      const numbers = value.replace(/\D/g, "");
+      if (numbers.length === 11) {
+        formatted = maskCPF(value);
+      } else {
+        formatted = value;
+      }
     } else if (currentType === "plate") {
       formatted = maskPlate(value);
     } else {
@@ -146,13 +147,13 @@ export default function HistoryPage() {
 
   const performSearch = useCallback(() => {
     if (!searchValue.trim()) {
-      setFilters((prev) => ({
-        ...prev,
-        cpf: undefined,
-        plate: undefined,
-        invoiceNumber: undefined,
-        page: 1,
-      }));
+    setFilters((prev) => ({
+      ...prev,
+      document: undefined,
+      plate: undefined,
+      invoiceNumber: undefined,
+      page: 1,
+    }));
       return;
     }
 
@@ -161,8 +162,8 @@ export default function HistoryPage() {
 
     setFilters((prev) => ({
       ...prev,
-      cpf: type === "cpf" ? unmaskCPF(searchValue) : undefined,
-      plate: type === "plate" ? unmaskPlate(searchValue) : undefined,
+      document: type === "document" ? searchValue.replace(/\D/g, "") : undefined,
+      plate: type === "plate" ? searchValue.replace(/[^A-Z0-9]/gi, "").toUpperCase() : undefined,
       invoiceNumber:
         type === "invoice" ? searchValue.replace(/\D/g, "") : undefined,
       page: 1,
@@ -213,7 +214,7 @@ export default function HistoryPage() {
 
   const hasActiveFilters = useMemo(() => {
     return !!(
-      filters.cpf ||
+      filters.document ||
       filters.plate ||
       filters.invoiceNumber ||
       filters.status ||
@@ -225,21 +226,21 @@ export default function HistoryPage() {
   }, [filters]);
 
   const getSearchPlaceholder = () => {
-    if (searchType === "cpf") return "000.000.000-00";
+    if (searchType === "document") return "Documento (CPF, Passaporte, etc.)";
     if (searchType === "plate") return "ABC-1234 ou ABC1D23";
     if (searchType === "invoice") return "00192";
-    return "CPF, Placa ou Número da NF";
+    return "Documento, Placa ou Número da NF";
   };
 
   const getSearchIcon = () => {
-    if (searchType === "cpf") return <User className="h-4 w-4" />;
+    if (searchType === "document") return <User className="h-4 w-4" />;
     if (searchType === "plate") return <Car className="h-4 w-4" />;
     if (searchType === "invoice") return <FileText className="h-4 w-4" />;
     return <Search className="h-4 w-4" />;
   };
 
   const getSearchLabel = () => {
-    if (searchType === "cpf") return "Buscando por CPF";
+    if (searchType === "document") return "Buscando por Documento";
     if (searchType === "plate") return "Buscando por Placa";
     if (searchType === "invoice") return "Buscando por Número da NF";
     return "Buscar";
@@ -293,18 +294,18 @@ export default function HistoryPage() {
                   <Button
                     type="button"
                     variant={
-                      selectedSearchType === "cpf" ? "default" : "outline"
+                      selectedSearchType === "document" ? "default" : "outline"
                     }
                     size="sm"
                     className="h-7 text-xs"
                     onClick={() =>
                       handleSearchTypeSelect(
-                        selectedSearchType === "cpf" ? null : "cpf"
+                        selectedSearchType === "document" ? null : "document"
                       )
                     }
                   >
                     <User className="h-3 w-3 mr-1" />
-                    CPF
+                    Documento
                   </Button>
                   <Button
                     type="button"
@@ -602,7 +603,7 @@ export default function HistoryPage() {
                                     {cycle.person?.name || "N/A"}
                                   </p>
                                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    {cycle.person?.cpf || "-"}
+                                    {cycle.person?.document || cycle.person?.cpf || "-"}
                                   </p>
                                   {cycle.movements &&
                                     cycle.movements.length > 1 && (
@@ -904,7 +905,7 @@ export default function HistoryPage() {
                         <ChevronRight className="h-4 w-4 ml-1" />
                       </Button>
                     </div>
-                  </div>
+            </div>
                 )}
               </>
             )}

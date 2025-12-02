@@ -75,3 +75,41 @@ export function useLogout() {
     queryClient.clear();
   };
 }
+
+interface RegisterUserData {
+  username: string;
+  name: string;
+  password: string;
+  role?: "ADMIN" | "OPERATOR";
+}
+
+interface RegisterUserResponse {
+  access_token: string;
+  user: User;
+}
+
+// Registrar novo usuário (ADMIN apenas)
+export function useRegisterUser() {
+  return useMutation({
+    mutationFn: async (data: RegisterUserData): Promise<RegisterUserResponse> => {
+      const response = await api.post("/auth/register", data);
+      return response.data;
+    },
+  });
+}
+
+// Deletar pessoa (ADMIN apenas)
+export function useDeletePerson() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (personId: string) => {
+      const { data } = await api.delete(`/persons/${personId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["persons"] });
+      queryClient.invalidateQueries({ queryKey: ["movements"] });
+    },
+  });
+}

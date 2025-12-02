@@ -53,13 +53,18 @@
 					"response": []
 				},
 				{
-					"name": "Registrar Usuário",
+					"name": "Registrar Usuário (ADMIN)",
 					"request": {
 						"method": "POST",
 						"header": [
 							{
 								"key": "Content-Type",
 								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -76,7 +81,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["auth", "register"]
 						},
-						"description": "Registra um novo usuário no sistema"
+						"description": "Registra um novo usuário no sistema. Requer autenticação JWT e role ADMIN."
 					},
 					"response": []
 				},
@@ -150,23 +155,50 @@
 			"name": "Pessoas",
 			"item": [
 				{
-					"name": "Buscar por CPF",
+					"name": "Buscar por Documento",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/persons/cpf/:cpf",
+							"raw": "{{baseUrl}}/persons/document/:document",
 							"host": ["{{baseUrl}}"],
-							"path": ["persons", "cpf", ":cpf"],
+							"path": ["persons", "document", ":document"],
 							"variable": [
 								{
-									"key": "cpf",
+									"key": "document",
 									"value": "12345678900",
-									"description": "CPF da pessoa (apenas números)"
+									"description": "Documento da pessoa (CPF, Passaporte, etc.)"
 								}
 							]
 						},
-						"description": "Busca uma pessoa pelo CPF"
+						"description": "Busca uma pessoa pelo documento"
+					},
+					"response": []
+				},
+				{
+					"name": "Excluir Pessoa (ADMIN)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/persons/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["persons", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{personId}}",
+									"description": "UUID da pessoa a ser excluída"
+								}
+							]
+						},
+						"description": "Exclui uma pessoa do sistema. Requer autenticação JWT e role ADMIN. Não é possível excluir pessoa com movimentações registradas."
 					},
 					"response": []
 				}
@@ -222,7 +254,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"cpf\": \"12345678900\",\n  \"name\": \"João Silva\",\n  \"rg\": \"1234567\",\n  \"company\": \"Transportadora XYZ\",\n  \"photoUrl\": \"https://example.com/photo.jpg\",\n  \"personType\": \"DRIVER\",\n  \"plate\": \"ABC1234\",\n  \"vehicleModel\": \"Scania R450\",\n  \"vehicleColor\": \"Branco\",\n  \"vehicleType\": \"TRUCK\",\n  \"reason\": \"Entrega de carga\",\n  \"createdById\": \"{{userId}}\"\n}",
+									"raw": "{\n  \"document\": \"12345678900\",\n  \"name\": \"João Silva\",\n  \"rg\": \"1234567\",\n  \"company\": \"Transportadora XYZ\",\n  \"photoUrl\": \"https://example.com/photo.jpg\",\n  \"personType\": \"DRIVER\",\n  \"plate\": \"ABC1234\",\n  \"vehicleModel\": \"Scania R450\",\n  \"vehicleColor\": \"Branco\",\n  \"vehicleType\": \"TRUCK\",\n  \"trailerPlate\": \"CARRETA123\",\n  \"reason\": \"Entrega de carga\",\n  \"createdById\": \"{{userId}}\"\n}",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -256,7 +288,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"cpf\": \"98765432100\",\n  \"name\": \"Maria Santos\",\n  \"personType\": \"VISITOR\",\n  \"reason\": \"Visita técnica\",\n  \"createdById\": \"{{userId}}\"\n}",
+									"raw": "{\n  \"document\": \"98765432100\",\n  \"name\": \"Maria Santos\",\n  \"personType\": \"VISITOR\",\n  \"reason\": \"Visita técnica\",\n  \"createdById\": \"{{userId}}\"\n}",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -295,7 +327,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n  \"movementId\": \"{{movementId}}\",\n  \"type\": \"FULL_EXIT\",\n  \"invoiceNumbers\": [\"00192\", \"00193\", \"00194\"],\n  \"sealNumber\": \"9988\",\n  \"photos\": [\n    \"https://example.com/photo1.jpg\",\n    \"https://example.com/photo2.jpg\"\n  ],\n  \"exitReason\": \"Entrega concluída\",\n  \"closedById\": \"{{userId}}\"\n}",
+									"raw": "{\n  \"movementId\": \"{{movementId}}\",\n  \"type\": \"FULL_EXIT\",\n  \"invoiceNumbers\": [\"00192\", \"00193\", \"00194\"],\n  \"sealNumber\": \"9988\",\n  \"photos\": [\n    \"https://example.com/lacre1.jpg\",\n    \"https://example.com/lacre2.jpg\",\n    \"https://example.com/nf1.jpg\",\n    \"https://example.com/nf2.jpg\",\n    \"https://example.com/veiculo.jpg\"\n  ],\n  \"exitReason\": \"Entrega concluída\",\n  \"closedById\": \"{{userId}}\"\n}",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -425,19 +457,19 @@
 							"response": []
 						},
 						{
-							"name": "Por CPF",
+							"name": "Por Documento",
 							"request": {
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{baseUrl}}/movements/history?cpf=12345678900&page=1&limit=20",
+									"raw": "{{baseUrl}}/movements/history?document=12345678900&page=1&limit=20",
 									"host": ["{{baseUrl}}"],
 									"path": ["movements", "history"],
 									"query": [
 										{
-											"key": "cpf",
+											"key": "document",
 											"value": "12345678900",
-											"description": "CPF da pessoa"
+											"description": "Documento da pessoa (CPF, Passaporte, etc.)"
 										},
 										{
 											"key": "page",
@@ -449,7 +481,7 @@
 										}
 									]
 								},
-								"description": "Busca ciclos de movimentação por CPF. Retorna todos os ciclos de uma pessoa específica."
+								"description": "Busca ciclos de movimentação por documento. Retorna todos os ciclos de uma pessoa específica."
 							},
 							"response": []
 						},
@@ -658,6 +690,86 @@
 						"description": "Busca um movimento específico por ID (movimento individual, não o ciclo completo). Use GET /movements/cycle/:id para ver todas as movimentações do ciclo."
 					},
 					"response": []
+				},
+				{
+					"name": "Excluir Movimento (ADMIN)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/movements/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["movements", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{movementId}}",
+									"description": "UUID do movimento a ser excluído"
+								}
+							]
+						},
+						"description": "Exclui um movimento do sistema. Requer autenticação JWT e role ADMIN."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Pessoas",
+			"item": [
+				{
+					"name": "Buscar por Documento",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/persons/document/:document",
+							"host": ["{{baseUrl}}"],
+							"path": ["persons", "document", ":document"],
+							"variable": [
+								{
+									"key": "document",
+									"value": "12345678900",
+									"description": "Documento da pessoa (CPF, Passaporte, etc.)"
+								}
+							]
+						},
+						"description": "Busca uma pessoa pelo documento"
+					},
+					"response": []
+				},
+				{
+					"name": "Excluir Pessoa (ADMIN)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/persons/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["persons", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{personId}}",
+									"description": "UUID da pessoa a ser excluída"
+								}
+							]
+						},
+						"description": "Exclui uma pessoa do sistema. Requer autenticação JWT e role ADMIN. Não é possível excluir pessoa com movimentações registradas."
+					},
+					"response": []
 				}
 			]
 		}
@@ -691,6 +803,12 @@
 			"value": "",
 			"type": "string",
 			"description": "ID do ciclo (obter do campo cycleId na resposta de GET /movements/history). Usado em GET /movements/cycle/:id"
+		},
+		{
+			"key": "personId",
+			"value": "",
+			"type": "string",
+			"description": "ID da pessoa (obter da resposta de GET /persons/document/:document ou de movimentações). Usado em DELETE /persons/:id"
 		}
 	],
 	"auth": {

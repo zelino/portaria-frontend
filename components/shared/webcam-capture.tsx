@@ -9,12 +9,14 @@ interface WebcamCaptureProps {
   onCapture: (imageSrc: string) => void;
   onCancel?: () => void;
   initialImage?: string | null;
+  allowMultiple?: boolean; // Permite múltiplas capturas sem resetar
 }
 
 export function WebcamCapture({
   onCapture,
   onCancel,
   initialImage,
+  allowMultiple = false,
 }: WebcamCaptureProps) {
   const webcamRef = useRef<Webcam>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(
@@ -26,14 +28,21 @@ export function WebcamCapture({
     if (imageSrc) {
       setCapturedImage(imageSrc);
       onCapture(imageSrc);
+
+      // Se allowMultiple, resetar após um pequeno delay para permitir nova captura
+      if (allowMultiple) {
+        setTimeout(() => {
+          setCapturedImage(null);
+        }, 500);
+      }
     }
-  }, [onCapture]);
+  }, [onCapture, allowMultiple]);
 
   const retry = () => {
     setCapturedImage(null);
   };
 
-  if (capturedImage) {
+  if (capturedImage && !allowMultiple) {
     return (
       <div className="space-y-4">
         <div className="relative w-full aspect-video bg-slate-100 rounded-lg overflow-hidden">
