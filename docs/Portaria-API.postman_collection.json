@@ -339,7 +339,7 @@
 									"host": ["{{baseUrl}}"],
 									"path": ["movements", "exit"]
 								},
-								"description": "Registra saída completa (pessoa + veículo)"
+								"description": "Registra saída completa (pessoa + veículo) e também finaliza uma saída parcial já registrada (`vehicleStayOpen: true`)."
 							},
 							"response": []
 						},
@@ -373,7 +373,7 @@
 									"host": ["{{baseUrl}}"],
 									"path": ["movements", "exit"]
 								},
-								"description": "Registra saída parcial (apenas pessoa, veículo fica no pátio)"
+								"description": "Registra saída parcial (apenas pessoa, veículo fica no pátio). Não use este tipo se o movimento já tiver `vehicleStayOpen: true` — nesse caso, finalize com FULL_EXIT."
 							},
 							"response": []
 						}

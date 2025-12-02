@@ -1,44 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { useDeleteMovement, useMovementById } from "@/hooks/use-movements";
+import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Calendar,
-  Clock,
-  User,
-  Truck,
-  Building,
-  FileText,
-  Camera,
-  UserCircle,
-  Trash2,
-  Loader2
+    ArrowRightCircle,
+    Calendar,
+    Camera,
+    Clock,
+    FileText,
+    History,
+    Loader2,
+    LogOut,
+    RefreshCcw,
+    Trash2,
+    Truck,
+    User,
+    UserCircle
 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import { useDeleteMovement } from "@/hooks/use-movements";
-import { useToast } from "@/hooks/use-toast";
+import { useMemo, useState } from "react";
 
 interface MovementDetailsModalProps {
   open: boolean;
@@ -62,15 +65,18 @@ export function MovementDetailsModal({
 }: MovementDetailsModalProps) {
   const { data: user } = useAuth();
   const deleteMovement = useDeleteMovement();
+  const { data: movementFromApi } = useMovementById(open ? movement?.id ?? null : null);
   const { toast } = useToast();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const isAdmin = user?.role === "ADMIN";
 
+  const resolvedMovement = useMemo(() => movementFromApi || movement, [movementFromApi, movement]);
+
   const handleDelete = async () => {
-    if (!movement?.id) return;
+    if (!resolvedMovement?.id) return;
 
     try {
-      await deleteMovement.mutateAsync(movement.id);
+      await deleteMovement.mutateAsync(resolvedMovement.id);
       toast({
         title: "Sucesso",
         description: "Movimento excluído com sucesso",
@@ -87,6 +93,7 @@ export function MovementDetailsModal({
   };
 
   if (!movement) return null;
+  if (!resolvedMovement) return null;
 
   return (
     <>
@@ -124,21 +131,21 @@ export function MovementDetailsModal({
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <StatusBadge
-                  status={movement.exitedAt ? "EXITED" : "IN_PATIO"}
-                  vehicleStayOpen={movement.vehicleStayOpen}
+                  status={resolvedMovement.exitedAt ? "EXITED" : "IN_PATIO"}
+                  vehicleStayOpen={resolvedMovement.vehicleStayOpen}
                 />
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <Calendar className="h-4 w-4" />
                 <span>
-                  Entrada: {format(new Date(movement.enteredAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  Entrada: {format(new Date(resolvedMovement.enteredAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </span>
               </div>
-              {movement.exitedAt && (
+              {resolvedMovement.exitedAt && (
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                   <Clock className="h-4 w-4" />
                   <span>
-                    Saída: {format(new Date(movement.exitedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    Saída: {format(new Date(resolvedMovement.exitedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </span>
                 </div>
               )}
@@ -155,42 +162,42 @@ export function MovementDetailsModal({
               </h3>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12 ring-2 ring-slate-200 dark:ring-slate-700">
-                    <AvatarFallback className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold text-lg">
-                      {getInitials(movement.person?.name || "N/A")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">
-                      {movement.person?.name || "N/A"}
-                    </p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      {movement.person?.type === "EMPLOYEE" && "Funcionário"}
-                      {movement.person?.type === "VISITOR" && "Visitante"}
-                      {movement.person?.type === "DRIVER" && "Motorista"}
-                    </p>
+                    <Avatar className="h-12 w-12 ring-2 ring-slate-200 dark:ring-slate-700">
+                      <AvatarFallback className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold text-lg">
+                        {getInitials(resolvedMovement.person?.name || "N/A")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100">
+                        {resolvedMovement.person?.name || "N/A"}
+                      </p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {resolvedMovement.person?.type === "EMPLOYEE" && "Funcionário"}
+                        {resolvedMovement.person?.type === "VISITOR" && "Visitante"}
+                        {resolvedMovement.person?.type === "DRIVER" && "Motorista"}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Documento:</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {movement.person?.document || movement.person?.cpf || "-"}
-                    </span>
-                  </div>
-                  {movement.person?.rg && (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Documento:</span>
+                      <span className="font-medium text-slate-900 dark:text-slate-100">
+                        {resolvedMovement.person?.document || resolvedMovement.person?.cpf || "-"}
+                      </span>
+                    </div>
+                  {resolvedMovement.person?.rg && (
                     <div className="flex justify-between">
                       <span className="text-slate-600 dark:text-slate-400">RG:</span>
                       <span className="font-medium text-slate-900 dark:text-slate-100">
-                        {movement.person.rg}
+                        {resolvedMovement.person.rg}
                       </span>
                     </div>
                   )}
-                  {movement.person?.company && (
+                  {resolvedMovement.person?.company && (
                     <div className="flex justify-between">
                       <span className="text-slate-600 dark:text-slate-400">Empresa:</span>
                       <span className="font-medium text-slate-900 dark:text-slate-100">
-                        {movement.person.company}
+                        {resolvedMovement.person.company}
                       </span>
                     </div>
                   )}
@@ -199,7 +206,7 @@ export function MovementDetailsModal({
             </div>
 
             {/* Dados do Veículo */}
-            {movement.vehicle ? (
+            {resolvedMovement.vehicle ? (
               <div className="space-y-4 p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
                 <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <Truck className="h-4 w-4" />
@@ -208,34 +215,42 @@ export function MovementDetailsModal({
                 <div className="space-y-3">
                   <div>
                     <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">
-                      {movement.vehicle.plate}
+                      {resolvedMovement.vehicle.plate}
                     </p>
                   </div>
                   <div className="space-y-2 text-sm">
-                    {movement.vehicle.model && (
+                    {resolvedMovement.vehicle.model && (
                       <div className="flex justify-between">
                         <span className="text-slate-600 dark:text-slate-400">Modelo:</span>
                         <span className="font-medium text-slate-900 dark:text-slate-100">
-                          {movement.vehicle.model}
+                          {resolvedMovement.vehicle.model}
                         </span>
                       </div>
                     )}
-                    {movement.vehicle.color && (
+                    {resolvedMovement.vehicle.color && (
                       <div className="flex justify-between">
                         <span className="text-slate-600 dark:text-slate-400">Cor:</span>
                         <span className="font-medium text-slate-900 dark:text-slate-100">
-                          {movement.vehicle.color}
+                          {resolvedMovement.vehicle.color}
                         </span>
                       </div>
                     )}
-                    {movement.vehicle.type && (
+                    {resolvedMovement.vehicle.type && (
                       <div className="flex justify-between">
                         <span className="text-slate-600 dark:text-slate-400">Tipo:</span>
                         <span className="font-medium text-slate-900 dark:text-slate-100">
-                          {movement.vehicle.type === "CAR" && "Carro"}
-                          {movement.vehicle.type === "TRUCK" && "Caminhão"}
-                          {movement.vehicle.type === "MOTORCYCLE" && "Moto"}
-                          {movement.vehicle.type === "OTHER" && "Outros"}
+                          {resolvedMovement.vehicle.type === "CAR" && "Carro"}
+                          {resolvedMovement.vehicle.type === "TRUCK" && "Caminhão"}
+                          {resolvedMovement.vehicle.type === "MOTORCYCLE" && "Moto"}
+                          {resolvedMovement.vehicle.type === "OTHER" && "Outros"}
+                        </span>
+                      </div>
+                    )}
+                    {resolvedMovement.trailerPlate && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-600 dark:text-slate-400">Carreta:</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">
+                          {resolvedMovement.trailerPlate}
                         </span>
                       </div>
                     )}
@@ -266,47 +281,56 @@ export function MovementDetailsModal({
                 <div>
                   <span className="text-slate-600 dark:text-slate-400">Motivo: </span>
                   <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {movement.reason}
+                    {resolvedMovement.reason}
                   </span>
                 </div>
               )}
-              {movement.invoiceNumbers && movement.invoiceNumbers.length > 0 && (
-                <div>
-                  <span className="text-slate-600 dark:text-slate-400">NFs: </span>
-                  <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {movement.invoiceNumbers.join(", ")}
-                  </span>
+              {resolvedMovement.invoiceNumbers && resolvedMovement.invoiceNumbers.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Notas Fiscais: </span>
+                    <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                      {resolvedMovement.invoiceNumbers.length} NF{resolvedMovement.invoiceNumbers.length > 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {resolvedMovement.invoiceNumbers.map((nf: string, idx: number) => (
+                      <Badge key={idx} variant="outline" className="font-mono text-xs">
+                        {nf}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               )}
               {/* Fallback para compatibilidade com dados antigos (invoiceNumber singular) */}
-              {(!movement.invoiceNumbers || movement.invoiceNumbers.length === 0) && movement.invoiceNumber && (
+              {(!resolvedMovement.invoiceNumbers || resolvedMovement.invoiceNumbers.length === 0) && resolvedMovement.invoiceNumber && (
                 <div>
                   <span className="text-slate-600 dark:text-slate-400">NF: </span>
                   <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {movement.invoiceNumber}
+                    {resolvedMovement.invoiceNumber}
                   </span>
                 </div>
               )}
-              {movement.sealNumber && (
+              {resolvedMovement.sealNumber && (
                 <div>
                   <span className="text-slate-600 dark:text-slate-400">Lacre: </span>
                   <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {movement.sealNumber}
+                    {resolvedMovement.sealNumber}
                   </span>
                 </div>
               )}
-              {movement.exitReason && (
+              {resolvedMovement.exitReason && (
                 <div>
                   <span className="text-slate-600 dark:text-slate-400">Motivo da Saída: </span>
                   <span className="font-medium text-slate-900 dark:text-slate-100">
-                    {movement.exitReason}
+                    {resolvedMovement.exitReason}
                   </span>
                 </div>
               )}
               <div>
                 <span className="text-slate-600 dark:text-slate-400">Permanência: </span>
                 <span className="font-medium text-slate-900 dark:text-slate-100">
-                  {formatDistanceToNow(new Date(movement.enteredAt), {
+                  {formatDistanceToNow(new Date(resolvedMovement.enteredAt), {
                     addSuffix: false,
                     locale: ptBR,
                   })}
@@ -315,41 +339,219 @@ export function MovementDetailsModal({
             </div>
           </div>
 
+          {/* Auditoria */}
+          {(resolvedMovement.createdBy || resolvedMovement.closedBy) && (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
+              {resolvedMovement.createdBy && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                    <UserCircle className="h-4 w-4" />
+                    <span>Entrada registrada por</span>
+                  </div>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 pl-6">
+                    {resolvedMovement.createdBy.name}
+                  </p>
+                  {resolvedMovement.createdBy.username && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 pl-6">
+                      @{resolvedMovement.createdBy.username}
+                    </p>
+                  )}
+                </div>
+              )}
+              {resolvedMovement.closedBy && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                    <UserCircle className="h-4 w-4" />
+                    <span>Saída registrada por</span>
+                  </div>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 pl-6">
+                    {resolvedMovement.closedBy.name}
+                  </p>
+                  {resolvedMovement.closedBy.username && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 pl-6">
+                      @{resolvedMovement.closedBy.username}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Timeline de Eventos */}
+          {resolvedMovement.events && Array.isArray(resolvedMovement.events) && resolvedMovement.events.length > 0 && (
+            <div className="space-y-3 p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Histórico da Movimentação
+              </h3>
+              <div className="space-y-2">
+                {resolvedMovement.events
+                  .slice()
+                  .sort(
+                    (a: any, b: any) =>
+                      new Date(b.performedAt || b.createdAt || 0).getTime() -
+                      new Date(a.performedAt || a.createdAt || 0).getTime()
+                  )
+                  .map((event: any, idx: number) => {
+                    const action = event.action || event.type;
+                    const ts = event.performedAt || event.createdAt || movement.enteredAt;
+                    const personName = event.person?.name || movement.person?.name;
+                    const vehiclePlate = event.vehicle?.plate || movement.vehicle?.plate;
+                    const getActionLabel = () => {
+                      switch (action) {
+                        case "ENTRY":
+                          return "Entrada";
+                        case "PARTIAL_EXIT":
+                          return "Saída Parcial";
+                        case "RETURN":
+                          return "Retorno de Saída Parcial";
+                        case "DRIVER_CHANGE":
+                          return "Troca de Motorista";
+                        case "FULL_EXIT":
+                          return "Saída Completa";
+                        default:
+                          return action || "Evento";
+                      }
+                    };
+                    const getIcon = () => {
+                      switch (action) {
+                        case "ENTRY":
+                          return <ArrowRightCircle className="h-4 w-4 text-green-600" />;
+                        case "RETURN":
+                          return <RefreshCcw className="h-4 w-4 text-green-600" />;
+                        case "DRIVER_CHANGE":
+                          return <User className="h-4 w-4 text-blue-600" />;
+                        case "PARTIAL_EXIT":
+                          return <Clock className="h-4 w-4 text-yellow-600" />;
+                        case "FULL_EXIT":
+                          return <LogOut className="h-4 w-4 text-red-600" />;
+                        default:
+                          return <History className="h-4 w-4 text-slate-500" />;
+                      }
+                    };
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-start gap-3 p-3 rounded border ${
+                          action === "DRIVER_CHANGE"
+                            ? "border-blue-300 dark:border-blue-700 bg-blue-50/70 dark:bg-blue-900/40"
+                            : "border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40"
+                        }`}
+                      >
+                        <div className="mt-0.5">{getIcon()}</div>
+                        <div className="space-y-1 text-sm">
+                          {action === "DRIVER_CHANGE" && (
+                            <div className="mb-1 px-2 py-0.5 rounded bg-blue-600 dark:bg-blue-500 text-white text-xs font-semibold inline-block">
+                              ⚠️ TROCA DE MOTORISTA
+                            </div>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">
+                              {getActionLabel()}
+                            </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                              {ts ? format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: ptBR }) : ""}
+                            </span>
+                          </div>
+                          {personName && (
+                            <div className="text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              <User className="h-3.5 w-3.5" />
+                              <span>{personName}</span>
+                              {event.person?.document && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
+                                  ({event.person.document})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {vehiclePlate && (
+                            <div className="text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              <Truck className="h-3.5 w-3.5" />
+                              <span>{vehiclePlate}</span>
+                              {event.vehicle?.model && (
+                                <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
+                                  - {event.vehicle.model}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {event.trailerPlate && (
+                            <div className="text-slate-700 dark:text-slate-300 flex items-center gap-1 text-xs">
+                              <Truck className="h-3 w-3" />
+                              <span>Carreta: {event.trailerPlate}</span>
+                            </div>
+                          )}
+                          {event.exitReason && (
+                            <div className="text-slate-700 dark:text-slate-300">
+                              Motivo: {event.exitReason}
+                            </div>
+                          )}
+                          {event.invoiceNumbers && event.invoiceNumbers.length > 0 && (
+                            <div className="text-slate-700 dark:text-slate-300 flex flex-wrap gap-1 items-center">
+                              <span>NFs:</span>
+                              {event.invoiceNumbers.map((nf: string, i: number) => (
+                                <Badge key={i} variant="outline" className="text-xs h-5">{nf}</Badge>
+                              ))}
+                            </div>
+                          )}
+                          {event.sealNumber && (
+                            <div className="text-slate-700 dark:text-slate-300 text-xs">
+                              Lacre: {event.sealNumber}
+                            </div>
+                          )}
+                          {(event.createdBy || event.closedBy) && (
+                            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+                              <UserCircle className="h-3 w-3" />
+                              <span>Por: {event.createdBy?.name || event.closedBy?.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* Fotos */}
-          {(movement.person?.photoUrl || movement.exitPhotos?.length > 0 || movement.photos?.length > 0) && (
+          {(movement.person?.photoUrl || movement.exitPhotos?.length > 0) && (
             <div className="space-y-4 p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
               <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
               </h3>
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {movement.person?.photoUrl && (
-                  <div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Foto de Entrada</p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Foto da Pessoa</p>
                     <img
                       src={movement.person.photoUrl}
-                      alt="Foto de entrada"
-                      className="w-full h-48 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                      alt="Foto da pessoa"
+                      className="w-full h-48 object-cover rounded-lg border-2 border-slate-200 dark:border-slate-700"
                     />
                   </div>
                 )}
-                {(movement.exitPhotos || movement.photos || [])?.map((photo: string, index: number) => (
-                  <div key={index}>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                      Foto de Saída {index + 1}
-                      {movement.exitPhotos && movement.exitPhotos.length > 1 && (
-                        <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
-                          (Lacre, NF ou Veículo)
-                        </span>
-                      )}
-                    </p>
-                    <img
-                      src={photo}
-                      alt={`Foto de saída ${index + 1}`}
-                      className="w-full h-48 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
-                    />
-                  </div>
-                ))}
+                {movement.exitPhotos && movement.exitPhotos.length > 0 && (
+                  <>
+                    <div className="col-span-full">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-2">
+                        Fotos da Saída ({movement.exitPhotos.length})
+                      </p>
+                    </div>
+                    {movement.exitPhotos.map((photo: string, index: number) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={photo}
+                          alt={`Foto da saída ${index + 1}`}
+                          className="w-full h-48 object-cover rounded-lg border-2 border-slate-200 dark:border-slate-700"
+                        />
+                        <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded">
+                          Foto {index + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           )}

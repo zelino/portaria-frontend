@@ -1,12 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { useCreateEntrance, usePersonByDocument, useVehicleByPlate } from "@/hooks/use-movements";
-import { useAuth } from "@/hooks/use-auth";
-import { useQueryClient } from "@tanstack/react-query";
+import { WebcamCapture } from "@/components/shared/webcam-capture";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,29 +19,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { WebcamCapture } from "@/components/shared/webcam-capture";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Search, Loader2, AlertCircle, ArrowRightCircle } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  useCreateEntrance,
+  useLastVehicleByDocument,
+  useMovementById,
+  usePersonByDocument,
+  useVehicleByPlate,
+} from "@/hooks/use-movements";
 import { useToast } from "@/hooks/use-toast";
-import { maskCPF, unmaskCPF, maskPlate, unmaskPlate } from "@/lib/masks";
-import { VehicleAbandonedWarningModal } from "./vehicle-abandoned-warning-modal";
+import { maskCPF } from "@/lib/masks";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, ArrowRightCircle, Loader2, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 import { MovementDetailsModal } from "./movement-details-modal";
-import { useMovementById } from "@/hooks/use-movements";
+import { VehicleAbandonedWarningModal } from "./vehicle-abandoned-warning-modal";
 
-const entrySchema = z.object({
-  document: z.string().min(1, "Documento é obrigatório"),
-  name: z.string().min(1, "Nome é obrigatório").min(3, "Nome deve ter pelo menos 3 caracteres"),
-  rg: z.string().optional(),
-  company: z.string().optional(),
-  personType: z.enum(["EMPLOYEE", "VISITOR", "DRIVER"]),
-  plate: z.string().optional(),
-  trailerPlate: z.string().optional(),
-  vehicleModel: z.string().optional(),
-  vehicleColor: z.string().optional(),
-  vehicleType: z.enum(["CAR", "TRUCK", "MOTORCYCLE", "OTHER"]).optional(),
-  reason: z.string().optional(),
-  photoUrl: z.string().optional(),
-});
+const entrySchema = z
+  .object({
+    document: z.string().min(1, "Documento é obrigatório"),
+    name: z.string().min(1, "Nome é obrigatório").min(3, "Nome deve ter pelo menos 3 caracteres"),
+    rg: z.string().optional(),
+    company: z.string().optional(),
+    personType: z.enum(["EMPLOYEE", "VISITOR", "DRIVER"]),
+    plate: z.string().optional(),
+    trailerPlate: z.string().optional(),
+    vehicleModel: z.string().optional(),
+    vehicleColor: z.string().optional(),
+    vehicleType: z.enum(["CAR", "TRUCK", "MOTORCYCLE", "OTHER"]).optional(),
+    reason: z.string().optional(),
+    photoUrl: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.plate && !data.vehicleType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tipo de veículo é obrigatório quando há placa",
+        path: ["vehicleType"],
+      });
+    }
+  });
 
 type EntryForm = z.infer<typeof entrySchema>;
 
@@ -57,10 +72,13 @@ interface EntryDialogProps {
   prefillData?: {
     document?: string;
     name?: string;
+    rg?: string;
+    company?: string;
     plate?: string;
     vehicleModel?: string;
     vehicleColor?: string;
     vehicleType?: string;
+    trailerPlate?: string;
   };
 }
 
@@ -72,6 +90,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   const [showVehicleWarning, setShowVehicleWarning] = useState(false);
   const [previousMovementId, setPreviousMovementId] = useState<string | null>(null);
   const [showPreviousMovement, setShowPreviousMovement] = useState(false);
+  const initializedRef = useRef(false);
   const { data: user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -106,6 +125,11 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   const plate = watch("plate");
   const personType = watch("personType");
   const document = watch("document");
+  const vehicleModel = watch("vehicleModel");
+  const vehicleColor = watch("vehicleColor");
+  const vehicleType = watch("vehicleType");
+
+  const { data: lastVehicleData } = useLastVehicleByDocument(document || null);
 
   // Preencher dados quando encontrar pessoa ou veículo
   useEffect(() => {
@@ -121,21 +145,43 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
 
   // Preencher dados quando prefillData for fornecido
   useEffect(() => {
-    if (prefillData && open) {
-      if (prefillData.document) {
-        setValue("document", prefillData.document, { shouldValidate: true });
-        setSearchQuery(prefillData.document);
+    if (prefillData && open && !initializedRef.current) {
+      // Marcar como inicializado
+      initializedRef.current = true;
+
+      // Detectar cenários:
+      // isReturn = tem documento (retorno do mesmo motorista)
+      // isVehiclePickup = só tem placa (troca de motorista)
+      const isReturn = !!prefillData.document;
+      const isVehiclePickup = !prefillData.document && !!prefillData.plate;
+
+      if (isReturn) {
+        // CENÁRIO: RETORNO - Pré-preencher pessoa + veículo
+        setValue("document", prefillData.document || "", { shouldValidate: true });
+        setSearchQuery(prefillData.document || "");
         setSearchType("document");
+
+        if (prefillData.name) {
+          setValue("name", prefillData.name, { shouldValidate: true });
+        }
+        if (prefillData.rg) {
+          setValue("rg", prefillData.rg);
+        }
+        if (prefillData.company) {
+          setValue("company", prefillData.company);
+        }
+      } else if (isVehiclePickup) {
+        // CENÁRIO: OUTRO MOTORISTA - Não pré-preencher pessoa, deixar busca livre
+        // ✅ CORREÇÃO: Não limpar campos, deixar vazios para busca manual
+        setValue("personType", "DRIVER");
+        // Iniciar com busca por documento (para permitir buscar novo motorista)
+        setSearchType("document");
+        setSearchQuery("");
       }
-      if (prefillData.name) {
-        setValue("name", prefillData.name, { shouldValidate: true });
-      }
+
+      // Pré-preencher dados do veículo (comum para ambos os cenários)
       if (prefillData.plate) {
         setValue("plate", prefillData.plate, { shouldValidate: true });
-        if (!prefillData.document) {
-          setSearchQuery(prefillData.plate);
-          setSearchType("plate");
-        }
       }
       if (prefillData.vehicleModel) {
         setValue("vehicleModel", prefillData.vehicleModel);
@@ -146,6 +192,14 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
       if (prefillData.vehicleType) {
         setValue("vehicleType", prefillData.vehicleType as any);
       }
+      if (prefillData.trailerPlate) {
+        setValue("trailerPlate", prefillData.trailerPlate);
+      }
+    }
+
+    // Reset da flag quando modal fecha
+    if (!open && initializedRef.current) {
+      initializedRef.current = false;
     }
   }, [prefillData, open, setValue]);
 
@@ -158,19 +212,39 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
     }
   }, [vehicleData, setValue]);
 
+  // Preencher último veículo vinculado ao documento (histórico mais recente)
+  useEffect(() => {
+    if (!lastVehicleData?.vehicle) return;
+
+    if (!plate) {
+      setValue("plate", lastVehicleData.vehicle.plate || "", { shouldValidate: true });
+    }
+    if (!vehicleModel && lastVehicleData.vehicle.model) {
+      setValue("vehicleModel", lastVehicleData.vehicle.model);
+    }
+    if (!vehicleColor && lastVehicleData.vehicle.color) {
+      setValue("vehicleColor", lastVehicleData.vehicle.color);
+    }
+    if (!vehicleType && lastVehicleData.vehicle.type) {
+      setValue("vehicleType", lastVehicleData.vehicle.type);
+    }
+  }, [lastVehicleData, plate, vehicleModel, vehicleColor, vehicleType, setValue]);
+
   // Aplicar máscaras nos inputs (opcional, apenas para formatação visual)
   const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Aplica máscara de CPF apenas se parecer com CPF (11 dígitos numéricos)
-    const numbers = value.replace(/\D/g, "");
-    if (numbers.length <= 11) {
-      const masked = maskCPF(value);
+    const raw = e.target.value;
+    const numbers = raw.replace(/\D/g, "");
+    const isCpfLike = /^[0-9.\-\s]+$/.test(raw) && numbers.length > 0 && numbers.length <= 11;
+
+    if (isCpfLike) {
+      const masked = maskCPF(numbers);
       setValue("document", numbers, { shouldValidate: true });
       e.target.value = masked;
-    } else {
-      // Para outros documentos, mantém como está
-      setValue("document", value, { shouldValidate: true });
+      return;
     }
+
+    // Documentos com letras/sufixos (passaporte/RG) são mantidos como digitados
+    setValue("document", raw.trim(), { shouldValidate: true });
   };
 
   const handlePlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,7 +276,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
     try {
       const payload = {
         ...data,
-        document: data.document.replace(/\D/g, ""), // Remove formatação mas mantém o valor
+        document: data.document.trim(),
         plate: data.plate ? data.plate.replace(/[^A-Z0-9]/gi, "").toUpperCase() : undefined,
         trailerPlate: data.trailerPlate ? data.trailerPlate.replace(/[^A-Z0-9]/gi, "").toUpperCase() : undefined,
         photoUrl: photo || undefined,
@@ -211,41 +285,78 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
 
       const result = await createEntrance.mutateAsync(payload);
 
-      // Verificar se há warning de veículo abandonado
-      if (result.data?.vehicleStayOpenWarning) {
+      // Verificar se há retorno de saída parcial
+      const vehicleWarning = result?.vehicleStayOpenWarning;
+      const isReturn = result?.isReturn; // Indica retorno após saída parcial
+      const driverChanged = result?.driverChanged; // Indica troca de motorista
+
+      // ⚠️ NOVO COMPORTAMENTO DO BACKEND:
+      // - isReturn + driverChanged = false: Mesmo motorista retornou (atualiza movimento)
+      // - isReturn + driverChanged = true: Motorista diferente (CRIA NOVO ciclo, isUpdated=false)
+
+      if (vehicleWarning && driverChanged) {
+        // CENÁRIO: Motorista diferente assumindo veículo
+        // Backend FECHOU ciclo anterior e CRIOU novo ciclo
+        queryClient.invalidateQueries({ queryKey: ["movements"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: ["movements", "history"] });
+
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ["movements", "active"] }),
+          queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] }),
+        ]);
+
         setVehicleAbandonedData({
           vehicleStayOpenWarning: true,
-          existingVehiclePlate: result.data.existingVehiclePlate,
-          previousMovementId: result.data.previousMovementId,
-          isSameDriver: result.data.isSameDriver,
-          previousDriverName: result.data.previousDriverName,
-          newMovementId: result.data.movement?.id,
+          existingVehiclePlate: result.existingVehiclePlate,
+          previousMovementId: result.previousMovementId,
+          isSameDriver: false,
+          previousDriverName: result.previousDriverName,
+          newMovementId: result.movement?.id,
         });
         setShowVehicleWarning(true);
-
-        // Se é o mesmo motorista, o backend já fechou o movimento anterior
-        // Invalidar queries imediatamente para atualizar a lista
-        if (result.data.isSameDriver) {
-          // Invalidar e refetch imediatamente para atualizar a lista do pátio
-          queryClient.invalidateQueries({ queryKey: ["movements"] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-          // Forçar refetch imediato
-          queryClient.refetchQueries({ queryKey: ["movements", "active"] });
-          queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] });
-
-          // Mostrar toast de sucesso informando que o movimento anterior foi fechado
-          toast({
-            title: "Sucesso",
-            description: "Entrada registrada com sucesso. O movimento anterior foi fechado automaticamente.",
-          });
-        }
-      } else {
-        toast({
-          title: "Sucesso",
-          description: "Entrada registrada com sucesso",
-        });
-        handleClose();
+        return;
       }
+
+      if (vehicleWarning && isReturn) {
+        // CENÁRIO: Mesmo motorista retornando após saída parcial
+        // Backend atualizou o mesmo movimento (exitedAt=null, vehicleStayOpen=false)
+        queryClient.invalidateQueries({ queryKey: ["movements"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ["movements", "active"] }),
+          queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] }),
+        ]);
+
+        setVehicleAbandonedData({
+          vehicleStayOpenWarning: true,
+          existingVehiclePlate: result.existingVehiclePlate,
+          previousMovementId: result.previousMovementId,
+          isSameDriver: true,
+          previousDriverName: result.previousDriverName,
+          newMovementId: result.movement?.id,
+        });
+        setShowVehicleWarning(true);
+        return;
+      }
+
+      // Entrada normal (sem saída parcial anterior)
+      // ✅ CORREÇÃO BUG #1: Só mostra toast após confirmar sucesso da API
+      queryClient.invalidateQueries({ queryKey: ["movements"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
+      // Aguardar refetch para garantir que dados foram salvos
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["movements", "active"] }),
+        queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] }),
+      ]);
+
+      toast({
+        title: "Sucesso",
+        description: "Entrada registrada com sucesso",
+      });
+      handleClose();
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -256,15 +367,26 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   };
 
   const handleClose = () => {
+    // ✅ CORREÇÃO: Aplicar mesma lógica de isReturn vs isVehiclePickup no reset
+    const isReturn = prefillData?.document;
+    const isVehiclePickup = prefillData && !prefillData.document && prefillData.plate;
+
     reset({
       personType: "DRIVER",
-      ...(prefillData && {
+      // Se for retorno, manter dados de pessoa; se for troca, limpar
+      ...(prefillData && isReturn && {
         document: prefillData.document || "",
         name: prefillData.name || "",
+        rg: prefillData.rg || "",
+        company: prefillData.company || "",
+      }),
+      // Sempre resetar dados de veículo se houver prefillData
+      ...(prefillData && {
         plate: prefillData.plate || "",
         vehicleModel: prefillData.vehicleModel || "",
         vehicleColor: prefillData.vehicleColor || "",
         vehicleType: prefillData.vehicleType as any || undefined,
+        trailerPlate: prefillData.trailerPlate || "",
       }),
     });
     setSearchQuery("");
@@ -288,33 +410,38 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
     setShowVehicleWarning(false);
   };
 
-  const handleContinueAfterWarning = () => {
-    // Se foi mesmo motorista, garantir que as queries foram invalidadas e refetchadas
-    if (vehicleAbandonedData?.isSameDriver) {
-      queryClient.invalidateQueries({ queryKey: ["movements"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      // Forçar refetch imediato para atualizar a lista
-      queryClient.refetchQueries({ queryKey: ["movements", "active"] });
-      queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] });
-    }
+  const handleContinueAfterWarning = async () => {
+    // ✅ Sempre atualizar a lista após fechar o warning
+    queryClient.invalidateQueries({ queryKey: ["movements"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
+    // Forçar refetch para garantir dados frescos
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["movements", "active"] }),
+      queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] }),
+    ]);
+
     setShowVehicleWarning(false);
     setVehicleAbandonedData(null);
-    // Fechar o modal após um pequeno delay para garantir que o refetch aconteceu
-    setTimeout(() => {
-      handleClose();
-    }, 100);
+    handleClose();
   };
+
+  // ✅ CORREÇÃO BUG #3: Distinguir entre retorno e troca de motorista
+  const isReturn = prefillData?.document; // Se tem documento, é retorno
+  const isVehiclePickup = prefillData && !prefillData.document; // Se tem placa mas não tem documento, é troca
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 w-[95vw] sm:w-full">
         <DialogHeader>
           <DialogTitle>
-            {prefillData ? "Entrada Rápida - Retorno" : "Nova Entrada"}
+            {isReturn ? "Entrada Rápida - Retorno" : isVehiclePickup ? "Nova Entrada - Outro Motorista" : "Nova Entrada"}
           </DialogTitle>
           <DialogDescription>
-            {prefillData
+            {isReturn
               ? "Registre o retorno após saída parcial. Os dados foram pré-preenchidos."
+              : isVehiclePickup
+              ? "Registre a entrada de um novo motorista para retirar o veículo. Apenas a placa foi pré-preenchida."
               : "Registre uma nova entrada de pessoa e/ou veículo"}
           </DialogDescription>
         </DialogHeader>
@@ -325,7 +452,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
           aria-label="Formulário de nova entrada"
         >
           {/* Alerta de Entrada Rápida */}
-          {prefillData && (
+          {isReturn && (
             <Alert className="border-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 animate-in slide-in-from-top-2 duration-300">
               <ArrowRightCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
               <AlertDescription className="text-green-800 dark:text-green-200 font-medium">
@@ -349,12 +476,39 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
               </AlertDescription>
             </Alert>
           )}
+          {/* Alerta de Troca de Motorista */}
+          {isVehiclePickup && (
+            <Alert className="border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 animate-in slide-in-from-top-2 duration-300">
+              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <AlertDescription className="text-blue-800 dark:text-blue-200 font-medium">
+                <div className="flex items-center justify-between">
+                  <span>Novo motorista assumindo veículo - Preencha os dados da nova pessoa</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      reset({
+                        personType: "DRIVER",
+                      });
+                      setSearchQuery("");
+                    }}
+                    className="h-7 px-2 text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200"
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Passo 1: Busca */}
           <div
             className={`space-y-4 p-4 rounded-lg border transition-all duration-200 ${
-              prefillData
+              isReturn
                 ? "bg-green-50/50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                : isVehiclePickup
+                ? "bg-blue-50/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
                 : "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700"
             }`}
             role="search"
@@ -567,7 +721,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="vehicleType">Tipo</Label>
+                    <Label htmlFor="vehicleType" className="text-sm font-medium text-slate-700 dark:text-slate-300">Tipo</Label>
                     <Select
                       onValueChange={(v) => setValue("vehicleType", v as any)}
                       aria-label="Tipo de veículo"

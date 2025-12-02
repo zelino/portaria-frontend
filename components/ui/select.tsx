@@ -22,6 +22,7 @@ const SelectTrigger = React.forwardRef<
       "flex h-11 w-full items-center justify-between rounded-lg",
       "border-2 border-slate-300 dark:border-slate-600",
       "bg-white dark:bg-slate-900",
+      "text-slate-900 dark:text-slate-100",
       "px-4 py-2.5 text-sm",
       "ring-offset-background",
       "data-[placeholder]:text-slate-400 dark:data-[placeholder]:text-slate-500",

@@ -394,11 +394,11 @@ curl -X GET http://localhost:3000/vehicles/plate/ABC1234
 
 ### POST /movements/entrance
 
-Registra uma entrada de pessoa (com ou sem veículo).
+Registra uma entrada de pessoa (com ou sem veículo). O backend faz upsert de pessoa/veículo e garante **um movimento ativo por veículo ou pedestre**.
 
 **Autenticação:** Não requerida (usa `createdById` para auditoria)
 
-**Payload:**
+**Payload mínimo:**
 
 ```json
 {
@@ -436,7 +436,11 @@ Registra uma entrada de pessoa (com ou sem veículo).
 - `trailerPlate` (string): Placa da carreta (opcional, quando houver)
 - `reason` (string): Motivo da entrada
 
-**Resposta (201):**
+**Restrições e validações:**
+- Bloqueia entrada se **placa já está ativa** (movimento com `exitedAt = null` para essa placa).
+- Bloqueia entrada se **pedestre/documento já está ativo** (sem veículo e `exitedAt = null`).
+
+**Resposta (201) - entrada normal:**
 
 ```json
 {
@@ -463,7 +467,7 @@ Registra uma entrada de pessoa (com ou sem veículo).
 }
 ```
 
-**Resposta com aviso de veículo abandonado:**
+**Resposta com retorno de saída parcial (veículo abandonado):**
 
 ```json
 {
@@ -488,29 +492,32 @@ Registra uma entrada de pessoa (com ou sem veículo).
   "vehicleStayOpenWarning": true,
   "existingVehiclePlate": "ABC1234",
   "previousMovementId": "uuid-do-movimento-anterior",
-  "isSameDriver": true,
-  "previousDriverName": "João Silva"
+  "previousDriverName": "João Silva",
+  "driverChanged": false,
+  "isReturn": true
 }
 ```
 
 **Campos adicionais quando `vehicleStayOpenWarning: true`:**
 
 - `previousMovementId` (string): ID do movimento anterior com veículo abandonado
-- `isSameDriver` (boolean): `true` se é o mesmo motorista retornando, `false` se é motorista diferente
-- `previousDriverName` (string): Nome do motorista do movimento anterior (quando `isSameDriver: false`)
+- `isReturn` (boolean): `true` se é um retorno de saída parcial (sempre que warning for true)
+- `driverChanged` (boolean): `true` quando um novo motorista assume o veículo; `false` quando é retorno do mesmo motorista
+- `previousDriverName` (string): Nome do motorista do movimento anterior (quando `driverChanged: true`)
+- O movimento é **reaproveitado**: retorna com `exitedAt = null` e `vehicleStayOpen = false`
 
 **Comportamento:**
 
-1. **Mesmo Motorista (`isSameDriver: true`):**
-   - Sistema fecha automaticamente o movimento anterior (`vehicleStayOpen = false`)
-   - Cria novo movimento para o retorno
-   - Indica retorno após saída parcial (almoço)
+1. **Retorno do mesmo motorista (`driverChanged: false`):**
+   - Reabre o mesmo movimento (`vehicleStayOpen` volta para `false`, `exitedAt` fica `null`)
+   - Histórico recebe `RETURN`
+   - Nenhum novo movimento é criado; o ID permanece o mesmo
 
-2. **Motorista Diferente (`isSameDriver: false`):**
-   - Sistema **NÃO fecha** o movimento anterior automaticamente
-   - Cria novo movimento
-   - Operador precisa fechar o movimento anterior manualmente (com NF, lacre, etc)
-   - Indica que outro motorista está pegando o veículo
+2. **Motorista Diferente (`driverChanged: true`):**
+   - Sistema reabre o mesmo movimento e troca o motorista (`personId` é atualizado)
+   - Histórico recebe `DRIVER_CHANGE`
+   - O ID do movimento continua o mesmo
+   - Placa/veículo não podem ser alterados nesse fluxo (retorna 400)
 
 **Exemplo cURL - Entrada com veículo:**
 
@@ -608,11 +615,15 @@ Registra uma saída (completa ou parcial).
    - **Requer `exitReason` (obrigatório)** - Motivo da saída parcial
    - Não requer `invoiceNumbers`, `sealNumber` ou `photos`
    - **Importante:** O veículo pode ser retirado pelo mesmo motorista (retorno) ou por outro motorista (troca)
+   - **Pode ser finalizada depois:** Uma saída parcial pode ser convertida em saída completa posteriormente usando `FULL_EXIT` no mesmo movimento
 
 2. **FULL_EXIT** (Saída Completa):
    - Pessoa e veículo saem juntos
    - `invoiceNumbers` é opcional (pode ter nenhuma, uma ou múltiplas NFs)
    - `sealNumber` e `photos` são opcionais
+   - **Pode finalizar saída parcial:** Se o movimento já tem `exitedAt` preenchido e `vehicleStayOpen: true` (saída parcial), usar `FULL_EXIT` atualiza o movimento para saída completa, adicionando `invoiceNumbers`, `sealNumber` e `photos`
+   - **Não é permitido uma nova `PARTIAL_EXIT` em movimento com saída parcial aberta:** quando `vehicleStayOpen: true`, somente `FULL_EXIT` é aceito para finalizar o fluxo
+   - **Não pode atualizar movimento já finalizado:** Se o movimento já tem `exitedAt` preenchido e `vehicleStayOpen: false` (já finalizado), retorna erro 400
 
 **Resposta (200):**
 
@@ -708,6 +719,60 @@ curl -X POST http://localhost:3000/movements/exit \
   ]
 }
 ```
+
+**Resposta (400) - Tentar atualizar movimento já finalizado:**
+
+```json
+{
+  "statusCode": 400,
+  "message": "Movimento já foi finalizado completamente. Não é possível atualizar.",
+  "error": "Bad Request"
+}
+```
+
+**Exemplo cURL - Finalizar Saída Parcial (Converter em Completa):**
+
+```bash
+# 1. Primeiro, fazer saída parcial
+USER_ID="uuid-do-usuario"
+MOVEMENT_ID="uuid-do-movimento"
+
+curl -X POST http://localhost:3000/movements/exit \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"movementId\": \"$MOVEMENT_ID\",
+    \"type\": \"PARTIAL_EXIT\",
+    \"exitReason\": \"Almoço - retorno às 13h\",
+    \"closedById\": \"$USER_ID\"
+  }"
+
+# 2. Depois, finalizar a saída parcial (adicionar NF, lacre, fotos)
+curl -X POST http://localhost:3000/movements/exit \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"movementId\": \"$MOVEMENT_ID\",
+    \"type\": \"FULL_EXIT\",
+    \"invoiceNumbers\": [\"999888\", \"999889\"],
+    \"sealNumber\": \"LACRE999\",
+    \"photos\": [
+      \"https://example.com/lacre1.jpg\",
+      \"https://example.com/nf1.jpg\",
+      \"https://example.com/veiculo.jpg\"
+    ],
+    \"closedById\": \"$USER_ID\"
+  }"
+
+# Resultado: O movimento agora tem vehicleStayOpen: false e não aparece mais no pátio
+```
+
+**Comportamento ao Finalizar Saída Parcial:**
+
+- O `exitedAt` original é **mantido** (não é atualizado)
+- O `vehicleStayOpen` é alterado de `true` para `false`
+- Os campos `invoiceNumbers`, `sealNumber` e `exitPhotos` são adicionados/atualizados
+- O `exitReason` pode ser atualizado (opcional)
+- O `closedById` pode ser atualizado (pode ser o mesmo ou diferente usuário)
+- Após finalizar, o movimento **não aparece mais** no pátio (`GET /dashboard/patio`)
 
 ---
 
@@ -1065,7 +1130,30 @@ Busca um movimento específico por ID (movimento individual, não o ciclo comple
     "id": "uuid",
     "name": "Operador",
     "username": "operador"
-  }
+  },
+  "events": [
+    {
+      "action": "ENTRY",
+      "performedAt": "2024-01-15T10:30:00.000Z",
+      "person": { "name": "João Silva", "document": "12345678900" },
+      "vehicle": { "plate": "ABC1234" }
+    },
+    {
+      "action": "PARTIAL_EXIT",
+      "performedAt": "2024-01-15T12:00:00.000Z",
+      "exitReason": "Almoço"
+    },
+    {
+      "action": "DRIVER_CHANGE",
+      "performedAt": "2024-01-15T13:00:00.000Z",
+      "person": { "name": "Maria Santos", "document": "98765432100" }
+    },
+    {
+      "action": "FULL_EXIT",
+      "performedAt": "2024-01-15T16:00:00.000Z",
+      "invoiceNumbers": ["00192"]
+    }
+  ]
 }
 ```
 
@@ -1236,7 +1324,7 @@ Para usar esses campos:
 
 2. **CPF e Placa**: São campos únicos. Se já existirem, os registros serão atualizados (upsert).
 
-3. **Veículo Abandonado**: Quando um motorista retorna após saída parcial, o sistema detecta e retorna `vehicleStayOpenWarning: true` com a placa do veículo existente.
+3. **Veículo Abandonado / Troca de Motorista**: Quando há uma saída parcial, o retorno (mesmo ou outro motorista) reaproveita o mesmo movimento e retorna `vehicleStayOpenWarning: true`. Um motorista diferente gera histórico `DRIVER_CHANGE` no mesmo ID; a placa do veículo não pode ser alterada nesse fluxo.
 
 4. **Validação**: Todos os endpoints validam os dados de entrada. Campos obrigatórios ausentes ou tipos incorretos retornarão erro 400.
 

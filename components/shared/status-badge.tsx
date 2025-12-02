@@ -1,19 +1,34 @@
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, XCircle, FileText } from "lucide-react";
+import { CheckCircle2, Clock, FileText, Truck, XCircle } from "lucide-react";
 
 interface StatusBadgeProps {
   status?: "IN_PATIO" | "LUNCH" | "EXITED";
   vehicleStayOpen?: boolean;
   exitType?: "ACTIVE" | "PARTIAL_EXIT" | "FULL_EXIT" | "FULL_EXIT_WITH_INVOICE";
   cycleStatus?: "active" | "closed";
+  showVehicleAbandoned?: boolean;
 }
 
 export function StatusBadge({
   status,
   vehicleStayOpen,
   exitType,
-  cycleStatus
+  cycleStatus,
+  showVehicleAbandoned
 }: StatusBadgeProps) {
+  // Badge especial para veículo abandonado (saída parcial com veículo no pátio)
+  if (showVehicleAbandoned || (vehicleStayOpen && status !== "EXITED")) {
+    return (
+      <Badge
+        variant="outline"
+        className="bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-800 font-semibold shadow-sm"
+      >
+        <Truck className="mr-1.5 h-3.5 w-3.5" />
+        Veículo Abandonado
+      </Badge>
+    );
+  }
+
   // Se exitType for fornecido, usar ele (nova API)
   if (exitType) {
     switch (exitType) {

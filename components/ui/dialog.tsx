@@ -42,6 +42,7 @@ const DialogContent = React.forwardRef<
         "fixed left-[50%] top-[50%] z-50 grid w-[95vw] sm:w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4",
         "border border-slate-200 dark:border-slate-700",
         "bg-white dark:bg-slate-800",
+        "text-slate-900 dark:text-slate-100",
         "shadow-2xl shadow-black/20 dark:shadow-black/40",
         "p-4 sm:p-6 duration-200",
         "max-h-[90vh] overflow-y-auto",
@@ -101,6 +102,7 @@ const DialogTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "text-lg font-semibold leading-none tracking-tight",
+      "text-slate-900 dark:text-slate-100",
       className
     )}
     {...props}

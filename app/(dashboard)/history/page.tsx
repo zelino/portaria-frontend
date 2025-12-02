@@ -11,39 +11,40 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import {
-  MovementsHistoryFilters,
-  useMovementsHistory,
+    MovementsHistoryFilters,
+    useMovementsHistory,
 } from "@/hooks/use-movements";
-import { maskCPF, maskPlate, unmaskCPF, unmaskPlate } from "@/lib/masks";
+import { maskCPF, maskPlate } from "@/lib/masks";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Car,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  FileText,
-  Filter,
-  Search,
-  User,
-  X,
+    Car,
+    ChevronLeft,
+    ChevronRight,
+    Eye,
+    FileText,
+    Filter,
+    Search,
+    User,
+    X,
 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 function getInitials(name: string) {
@@ -86,18 +87,33 @@ function detectSearchType(value: string): SearchType {
 }
 
 export default function HistoryPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const plateFromUrl = searchParams.get('plate');
+
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<any>(null);
   const [filters, setFilters] = useState<MovementsHistoryFilters>({
     page: 1,
     limit: 20,
   });
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState(plateFromUrl ? maskPlate(plateFromUrl) : "");
   const [selectedSearchType, setSelectedSearchType] =
-    useState<SearchType>(null);
+    useState<SearchType>(plateFromUrl ? "plate" : null);
   const [showFilters, setShowFilters] = useState(false);
 
   const { data: historyData, isLoading } = useMovementsHistory(filters);
+
+  // Inicializar filtro com placa da URL se existir
+  useEffect(() => {
+    if (plateFromUrl && !filters.plate) {
+      setFilters(prev => ({
+        ...prev,
+        plate: plateFromUrl.replace(/[^A-Z0-9]/gi, "").toUpperCase(),
+        page: 1,
+      }));
+    }
+  }, [plateFromUrl, filters.plate]);
 
   // Agora a API retorna ciclos, não movimentos individuais
   const cycles = historyData?.data || [];
@@ -197,6 +213,8 @@ export default function HistoryPage() {
       page: 1,
       limit: 20,
     });
+    // Remover query params da URL
+    router.push('/history');
   };
 
   const handlePageChange = (newPage: number) => {

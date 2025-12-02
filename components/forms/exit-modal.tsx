@@ -30,7 +30,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -55,9 +55,10 @@ export function ExitDialog({
   movement,
   onSuccess,
 }: ExitDialogProps) {
-  const [exitType, setExitType] = useState<"FULL_EXIT" | "PARTIAL_EXIT">(
-    "FULL_EXIT"
-  );
+  // Verificar se o movimento já tem saída parcial
+  const isPartialExit = movement?.exitedAt && movement?.vehicleStayOpen;
+
+  const [exitType, setExitType] = useState<"FULL_EXIT" | "PARTIAL_EXIT">("FULL_EXIT");
   const [photos, setPhotos] = useState<string[]>([]);
   const [invoiceNumbers, setInvoiceNumbers] = useState<string[]>([]);
   const [newInvoiceNumber, setNewInvoiceNumber] = useState("");
@@ -77,8 +78,24 @@ export function ExitDialog({
 
   const exitReason = watch("exitReason");
 
+  useEffect(() => {
+    if (isPartialExit) {
+      setExitType("FULL_EXIT");
+    }
+  }, [isPartialExit, movement?.id, open]);
+
   const onSubmit = async (data: ExitForm) => {
     if (!user || !movement) return;
+
+    if (isPartialExit && exitType === "PARTIAL_EXIT") {
+      toast({
+        title: "Ação não permitida",
+        description: "Este movimento já tem saída parcial. Finalize com Saída Completa.",
+        variant: "destructive",
+      });
+      setExitType("FULL_EXIT");
+      return;
+    }
 
     // Validação manual para exitReason quando é saída parcial
     if (exitType === "PARTIAL_EXIT" && !data.exitReason?.trim()) {
@@ -105,10 +122,13 @@ export function ExitDialog({
       };
 
       await createExit.mutateAsync(payload);
+
+      // ✅ Sempre atualizar a lista após saída
       toast({
         title: "Sucesso",
         description: "Saída registrada com sucesso",
       });
+
       handleClose();
       onSuccess?.();
     } catch (error: any) {
@@ -148,8 +168,6 @@ export function ExitDialog({
     setInvoiceNumbers((prev) => prev.filter((_, i) => i !== index));
   };
 
-  if (!movement) return null;
-
   function getInitials(name: string) {
     return name
       .split(" ")
@@ -159,15 +177,20 @@ export function ExitDialog({
       .slice(0, 2);
   }
 
+  if (!movement) return null;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 w-[95vw] sm:w-full">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
-            Registrar Saída
+            {isPartialExit ? "Finalizar Saída Completa" : "Registrar Saída"}
           </DialogTitle>
           <DialogDescription className="text-base">
-            Complete o registro de saída da movimentação
+            {isPartialExit
+              ? "Este movimento já tem uma saída parcial. Complete com NF, lacre e fotos para finalizar."
+              : "Complete o registro de saída da movimentação"
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -198,6 +221,18 @@ export function ExitDialog({
           </div>
         </div>
 
+        {isPartialExit && (
+          <Alert className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+            <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+            <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+              <p className="font-medium">Este movimento já tem uma saída parcial registrada.</p>
+              <p className="text-sm mt-1">
+                Complete com as informações de NF, lacre e fotos para finalizar a saída completa.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Tabs
           value={exitType}
           onValueChange={(v) => setExitType(v as any)}
@@ -212,6 +247,7 @@ export function ExitDialog({
             </TabsTrigger>
             <TabsTrigger
               value="PARTIAL_EXIT"
+              disabled={isPartialExit}
               className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm font-semibold"
             >
               Saída Parcial

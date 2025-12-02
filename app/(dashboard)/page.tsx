@@ -2,28 +2,28 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from "react";
-import { formatDistanceToNow, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { useActivePatio, useDashboardStats, useMovementById } from "@/hooks/use-movements";
-import { Header } from "@/components/layout/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Truck, User, Clock, Inbox, Package, LogOut, Eye, ArrowRightCircle, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { EntryDialog } from "@/components/forms/entry-form";
 import { ExitDialog } from "@/components/forms/exit-modal";
 import { MovementDetailsModal } from "@/components/forms/movement-details-modal";
+import { Header } from "@/components/layout/header";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { useActivePatio, useDashboardStats, useMovementById } from "@/hooks/use-movements";
+import { format, formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ArrowRightCircle, ChevronLeft, ChevronRight, Clock, Eye, Inbox, LogOut, Package, Truck, User } from "lucide-react";
+import { useEffect, useState } from "react";
 
 function getInitials(name: string) {
   return name
@@ -53,7 +53,7 @@ export default function DashboardPage() {
   const { data: previousMovement } = useMovementById(previousMovementId);
 
   const handleExit = (e: React.MouseEvent, movement: any) => {
-    e.stopPropagation(); // Prevenir que o clique na linha também seja acionado
+    e.stopPropagation();
     setSelectedMovement(movement);
     setExitDialogOpen(true);
   };
@@ -69,14 +69,33 @@ export default function DashboardPage() {
   };
 
   const handleQuickEntry = (movement: any) => {
-    // Pré-preencher dados da saída parcial para entrada rápida
+    // Pré-preencher dados da saída parcial para entrada rápida (RETORNO)
     setEntryPrefillData({
       document: movement.person?.document || movement.person?.cpf,
       name: movement.person?.name,
+      rg: movement.person?.rg,
+      company: movement.person?.company,
       plate: movement.vehicle?.plate,
       vehicleModel: movement.vehicle?.model,
       vehicleColor: movement.vehicle?.color,
       vehicleType: movement.vehicle?.type,
+      trailerPlate: movement.trailerPlate,
+    });
+    setEntryDialogOpen(true);
+  };
+
+  // ✅ CORREÇÃO BUG #3: Pré-preencher APENAS o veículo (sem dados pessoais)
+  // Backend detecta automaticamente a troca de motorista
+  const handleVehiclePickup = (movement: any) => {
+    setEntryPrefillData({
+      // APENAS dados do veículo
+      plate: movement.vehicle?.plate,
+      vehicleModel: movement.vehicle?.model,
+      vehicleColor: movement.vehicle?.color,
+      vehicleType: movement.vehicle?.type,
+      trailerPlate: movement.trailerPlate,
+      // NÃO pré-preencher: document, name, rg, company
+      // Backend vai criar DRIVER_CHANGE automaticamente
     });
     setEntryDialogOpen(true);
   };
@@ -85,7 +104,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (previousMovement) {
       setSelectedMovement(previousMovement);
-      setDetailsDialogOpen(true);
+      setDetailsDialogOpen(false);
+      setExitDialogOpen(true);
       setPreviousMovementId(null);
     }
   }, [previousMovement]);
@@ -254,9 +274,17 @@ export default function DashboardPage() {
                             />
                           </TableCell>
                           <TableCell>
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-base">
-                              {movement.vehicle?.plate || "-"}
-                            </span>
+                            <div className="space-y-1">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100 text-base">
+                                {movement.vehicle?.plate || "-"}
+                              </span>
+                              {movement.trailerPlate && (
+                                <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                  <Truck className="h-3 w-3" />
+                                  Carreta: {movement.trailerPlate}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
@@ -312,15 +340,38 @@ export default function DashboardPage() {
                                   <Button
                                     variant="default"
                                     size="sm"
+                                    onClick={(e) => handleExit(e, movement)}
+                                    className="h-9 px-4 bg-red-600 hover:bg-red-700 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 font-semibold"
+                                    aria-label="Finalizar saída completa desta movimentação"
+                                  >
+                                    <LogOut className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                                    Finalizar Saída
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleQuickEntry(movement);
                                     }}
-                                    className="h-9 px-4 bg-green-600 hover:bg-green-700 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 font-semibold"
-                                    aria-label="Registrar entrada rápida para esta saída parcial"
+                                    className="h-9 px-3 bg-green-600 hover:bg-green-700 text-white border-2 border-green-600 shadow-sm transition-colors"
+                                    aria-label="Registrar retorno do motorista desta movimentação"
                                   >
-                                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-                                    Entrada Rápida
+                                    <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                                    Retorno
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleVehiclePickup(movement);
+                                    }}
+                                    className="h-9 px-3 bg-blue-600 hover:bg-blue-700 text-white border-2 border-blue-600 shadow-sm transition-colors"
+                                    aria-label="Registrar nova entrada para outro motorista retirar o veículo"
+                                  >
+                                    <ArrowRightCircle className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                                    Outro Motorista
                                   </Button>
                                   <Button
                                     variant="outline"
@@ -398,9 +449,17 @@ export default function DashboardPage() {
                                 <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                                   {movement.person?.name || "N/A"}
                                 </p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                  {movement.vehicle?.plate || "Pedestre"}
-                                </p>
+                                <div className="space-y-0.5">
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    {movement.vehicle?.plate || "Pedestre"}
+                                  </p>
+                                  {movement.trailerPlate && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                      <Truck className="h-3 w-3" />
+                                      Carreta: {movement.trailerPlate}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <StatusBadge
@@ -441,12 +500,36 @@ export default function DashboardPage() {
                                   size="sm"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    handleExit(e, movement);
+                                  }}
+                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                                >
+                                  <LogOut className="h-4 w-4 mr-1.5" />
+                                  Finalizar Saída
+                                </Button>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     handleQuickEntry(movement);
                                   }}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white border-2 border-green-600 shadow-sm"
                                 >
-                                  <RotateCcw className="h-4 w-4 mr-1.5" />
-                                  Entrada Rápida
+                                  <ArrowRightCircle className="h-4 w-4 mr-1.5" />
+                                  Retorno
+                                </Button>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleVehiclePickup(movement);
+                                  }}
+                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-2 border-blue-600 shadow-sm"
+                                >
+                                  <ArrowRightCircle className="h-4 w-4 mr-1.5" />
+                                  Outro Motorista
                                 </Button>
                                 <Button
                                   variant="outline"

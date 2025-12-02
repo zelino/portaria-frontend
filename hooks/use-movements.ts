@@ -17,14 +17,19 @@ export function useActivePatio(filters: PatioFilters = {}) {
         if (filters.limit) params.append("limit", filters.limit.toString());
 
         const { data } = await api.get(`/dashboard/patio?${params.toString()}`);
+
+        // ✅ O backend agora retorna apenas os movimentos corretos!
+        // NÃO precisamos mais filtrar manualmente
+        const movements = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+
         // Retornar estrutura com data e pagination
         return {
-          data: Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []),
+          data: movements,
           pagination: data?.pagination || {
             page: 1,
             limit: 20,
-            total: 0,
-            totalPages: 0,
+            total: movements.length,
+            totalPages: Math.ceil(movements.length / (filters.limit || 20)),
           },
         };
       } catch (error) {
@@ -97,8 +102,12 @@ export function useCreateEntrance() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: any) => api.post("/movements/entrance", data),
+    mutationFn: async (data: any) => {
+      const response = await api.post("/movements/entrance", data);
+      return response.data;
+    },
     onSuccess: () => {
+      // ✅ Sempre invalidar queries após entrada para garantir dados frescos
       queryClient.invalidateQueries({ queryKey: ["movements"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -187,6 +196,34 @@ export function useCycleById(cycleId: string | null) {
       return data;
     },
     enabled: !!cycleId,
+  });
+}
+
+// Buscar último veículo vinculado por documento (ciclo mais recente)
+export function useLastVehicleByDocument(document: string | null) {
+  return useQuery({
+    queryKey: ["movements", "last-vehicle", document],
+    queryFn: async () => {
+      if (!document) return null;
+
+      const params = new URLSearchParams();
+      params.append("document", document);
+      params.append("limit", "1");
+
+      const { data } = await api.get(`/movements/history?${params.toString()}`);
+      const cycle = data?.data?.[0];
+      if (!cycle) return null;
+
+      const lastMovement = Array.isArray(cycle.movements) && cycle.movements.length > 0
+        ? cycle.movements[cycle.movements.length - 1]
+        : null;
+
+      return {
+        vehicle: cycle.vehicle || lastMovement?.vehicle || null,
+        lastMovement,
+      };
+    },
+    enabled: !!document,
   });
 }
 
