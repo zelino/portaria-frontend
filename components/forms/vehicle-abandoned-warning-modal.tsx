@@ -106,6 +106,15 @@ export function VehicleAbandonedWarningModal({
   };
 
   const handleContinue = () => {
+    // Se é o mesmo motorista, o backend já fechou o movimento anterior
+    // Invalidar queries e forçar refetch para atualizar a lista do pátio
+    if (data.isSameDriver) {
+      queryClient.invalidateQueries({ queryKey: ["movements"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      // Forçar refetch imediato para atualizar a lista
+      queryClient.refetchQueries({ queryKey: ["movements", "active"] });
+      queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] });
+    }
     onOpenChange(false);
     onContinue?.();
   };

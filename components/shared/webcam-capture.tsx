@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, X } from "lucide-react";
+import { Camera, FlipHorizontal, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import Webcam from "react-webcam";
 
 interface WebcamCaptureProps {
@@ -11,6 +11,8 @@ interface WebcamCaptureProps {
   initialImage?: string | null;
   allowMultiple?: boolean; // Permite múltiplas capturas sem resetar
 }
+
+type FacingMode = "user" | "environment";
 
 export function WebcamCapture({
   onCapture,
@@ -22,6 +24,7 @@ export function WebcamCapture({
   const [capturedImage, setCapturedImage] = useState<string | null>(
     initialImage || null
   );
+  const [facingMode, setFacingMode] = useState<FacingMode>("environment"); // Padrão: traseira
 
   const capture = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot();
@@ -42,6 +45,11 @@ export function WebcamCapture({
     setCapturedImage(null);
   };
 
+  const toggleCamera = () => {
+    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
+    setCapturedImage(null); // Resetar imagem ao trocar câmera
+  };
+
   if (capturedImage && !allowMultiple) {
     return (
       <div className="space-y-4">
@@ -51,9 +59,31 @@ export function WebcamCapture({
             alt="Captured"
             className="w-full h-full object-contain"
           />
+          {/* Botão para alternar câmera mesmo com imagem capturada */}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              toggleCamera();
+              retry();
+            }}
+            className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white border-0"
+            aria-label={`Alternar para câmera ${
+              facingMode === "user" ? "traseira" : "frontal"
+            }`}
+          >
+            <FlipHorizontal className="h-4 w-4 mr-1" />
+            {facingMode === "user" ? "Traseira" : "Frontal"}
+          </Button>
         </div>
         <div className="flex gap-2">
-          <Button type="button" onClick={retry} variant="outline" className="flex-1">
+          <Button
+            type="button"
+            onClick={retry}
+            variant="outline"
+            className="flex-1"
+          >
             <Camera className="mr-2 h-4 w-4" />
             Tentar Novamente
           </Button>
@@ -75,7 +105,26 @@ export function WebcamCapture({
           ref={webcamRef}
           screenshotFormat="image/jpeg"
           className="w-full h-full object-cover"
+          videoConstraints={{
+            facingMode: facingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          }}
         />
+        {/* Botão para alternar câmera */}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={toggleCamera}
+          className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white border-0"
+          aria-label={`Alternar para câmera ${
+            facingMode === "user" ? "traseira" : "frontal"
+          }`}
+        >
+          <FlipHorizontal className="h-4 w-4 mr-1" />
+          {facingMode === "user" ? "Traseira" : "Frontal"}
+        </Button>
       </div>
       <Button type="button" onClick={capture} className="w-full">
         <Camera className="mr-2 h-4 w-4" />

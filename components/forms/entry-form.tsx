@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useCreateEntrance, usePersonByDocument, useVehicleByPlate } from "@/hooks/use-movements";
 import { useAuth } from "@/hooks/use-auth";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -73,6 +74,7 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   const [showPreviousMovement, setShowPreviousMovement] = useState(false);
   const { data: user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const createEntrance = useCreateEntrance();
 
   // Buscar movimento anterior quando necessário
@@ -220,6 +222,23 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
           newMovementId: result.data.movement?.id,
         });
         setShowVehicleWarning(true);
+
+        // Se é o mesmo motorista, o backend já fechou o movimento anterior
+        // Invalidar queries imediatamente para atualizar a lista
+        if (result.data.isSameDriver) {
+          // Invalidar e refetch imediatamente para atualizar a lista do pátio
+          queryClient.invalidateQueries({ queryKey: ["movements"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+          // Forçar refetch imediato
+          queryClient.refetchQueries({ queryKey: ["movements", "active"] });
+          queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] });
+
+          // Mostrar toast de sucesso informando que o movimento anterior foi fechado
+          toast({
+            title: "Sucesso",
+            description: "Entrada registrada com sucesso. O movimento anterior foi fechado automaticamente.",
+          });
+        }
       } else {
         toast({
           title: "Sucesso",
@@ -270,9 +289,20 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   };
 
   const handleContinueAfterWarning = () => {
+    // Se foi mesmo motorista, garantir que as queries foram invalidadas e refetchadas
+    if (vehicleAbandonedData?.isSameDriver) {
+      queryClient.invalidateQueries({ queryKey: ["movements"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      // Forçar refetch imediato para atualizar a lista
+      queryClient.refetchQueries({ queryKey: ["movements", "active"] });
+      queryClient.refetchQueries({ queryKey: ["dashboard", "stats"] });
+    }
     setShowVehicleWarning(false);
     setVehicleAbandonedData(null);
-    handleClose();
+    // Fechar o modal após um pequeno delay para garantir que o refetch aconteceu
+    setTimeout(() => {
+      handleClose();
+    }, 100);
   };
 
   return (
