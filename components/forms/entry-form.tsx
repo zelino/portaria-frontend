@@ -216,19 +216,26 @@ export function EntryDialog({ open, onOpenChange, onViewMovement, prefillData }:
   useEffect(() => {
     if (!lastVehicleData?.vehicle) return;
 
-    if (!plate) {
-      setValue("plate", lastVehicleData.vehicle.plate || "", { shouldValidate: true });
+    // Apenas preencher se os campos ainda estiverem vazios (primeiro preenchimento)
+    // Não sobrescrever se o usuário já editou manualmente
+    const currentPlate = plate;
+    const currentModel = vehicleModel;
+    const currentColor = vehicleColor;
+    const currentType = vehicleType;
+
+    if (!currentPlate && lastVehicleData.vehicle.plate) {
+      setValue("plate", lastVehicleData.vehicle.plate, { shouldValidate: true });
     }
-    if (!vehicleModel && lastVehicleData.vehicle.model) {
+    if (!currentModel && lastVehicleData.vehicle.model) {
       setValue("vehicleModel", lastVehicleData.vehicle.model);
     }
-    if (!vehicleColor && lastVehicleData.vehicle.color) {
+    if (!currentColor && lastVehicleData.vehicle.color) {
       setValue("vehicleColor", lastVehicleData.vehicle.color);
     }
-    if (!vehicleType && lastVehicleData.vehicle.type) {
+    if (!currentType && lastVehicleData.vehicle.type) {
       setValue("vehicleType", lastVehicleData.vehicle.type);
     }
-  }, [lastVehicleData, plate, vehicleModel, vehicleColor, vehicleType, setValue]);
+  }, [lastVehicleData, setValue]);
 
   // Aplicar máscaras nos inputs (opcional, apenas para formatação visual)
   const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
